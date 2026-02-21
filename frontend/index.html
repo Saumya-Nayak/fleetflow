@@ -12,6 +12,64 @@
       .auth-form.active {
         display: block;
       }
+      /* OTP digit boxes */
+      .otp-digit {
+        width: 44px;
+        height: 52px;
+        text-align: center;
+        font-size: 22px;
+        font-weight: 700;
+        font-family: "Courier New", monospace;
+        border: 2px solid var(--border);
+        border-radius: 10px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+      .otp-digit:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+      }
+      .otp-digit.filled {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .otp-digit.error {
+        border-color: var(--danger);
+        animation: shake 0.3s ease;
+      }
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-4px);
+        }
+        75% {
+          transform: translateX(4px);
+        }
+      }
+      .field-error {
+        color: var(--danger);
+        font-size: 12px;
+        margin-top: 4px;
+        display: block;
+        min-height: 16px;
+      }
+      .btn-link {
+        background: none;
+        border: none;
+        color: var(--accent);
+        cursor: pointer;
+        padding: 0;
+        font-size: inherit;
+        text-decoration: underline;
+      }
+      .btn-link:hover {
+        opacity: 0.8;
+      }
     </style>
   </head>
   <body>
@@ -74,11 +132,27 @@
             <p>Demo Credentials</p>
             <div class="demo-credential">
               <span>Fleet Manager</span>
-              <span>manager@fleetflow.com / admin123</span>
+              <span
+                ><a
+                  href="/cdn-cgi/l/email-protection"
+                  class="__cf_email__"
+                  data-cfemail="84e9e5eae5e3e1f6c4e2e8e1e1f0e2e8ebf3aae7ebe9"
+                  >[email&#160;protected]</a
+                >
+                / admin123</span
+              >
             </div>
             <div class="demo-credential">
               <span>Dispatcher</span>
-              <span>dispatcher@fleetflow.com / dispatch123</span>
+              <span
+                ><a
+                  href="/cdn-cgi/l/email-protection"
+                  class="__cf_email__"
+                  data-cfemail="f5919c86859481969d9087b5939990908193999a82db969a98"
+                  >[email&#160;protected]</a
+                >
+                / dispatch123</span
+              >
             </div>
             <div style="margin-top: 10px; display: flex; gap: 8px">
               <button
@@ -99,17 +173,18 @@
           </div>
         </div>
 
-        <!-- REGISTER FORM -->
+        <!-- REGISTER FORM — 3 steps: Details → OTP → Done -->
         <div class="auth-form" id="register-form">
-          <form onsubmit="handleRegister(event)">
+          <!-- Step 1: User Details -->
+          <div id="reg-step-1">
             <div class="form-group">
               <label class="form-label">Full Name</label>
               <input
                 class="form-control"
                 id="reg-name"
-                placeholder="Your name"
-                required
+                placeholder="Your full name"
               />
+              <span class="field-error" id="err-name"></span>
             </div>
             <div class="form-group">
               <label class="form-label">Email Address</label>
@@ -118,8 +193,8 @@
                 type="email"
                 id="reg-email"
                 placeholder="you@example.com"
-                required
               />
+              <span class="field-error" id="err-email"></span>
             </div>
             <div class="form-group">
               <label class="form-label">Password</label>
@@ -128,9 +203,8 @@
                 type="password"
                 id="reg-password"
                 placeholder="Min 6 characters"
-                required
-                minlength="6"
               />
+              <span class="field-error" id="err-password"></span>
             </div>
             <div class="form-group">
               <label class="form-label">Role</label>
@@ -142,13 +216,160 @@
               </select>
             </div>
             <button
-              type="submit"
               class="btn btn-primary"
               style="width: 100%; margin-top: 8px"
+              id="reg-send-otp-btn"
+              onclick="regSendOtp()"
             >
-              Create Account
+              Send Verification Code →
             </button>
-          </form>
+          </div>
+
+          <!-- Step 2: OTP Entry -->
+          <div id="reg-step-2" style="display: none">
+            <div style="text-align: center; margin-bottom: 20px">
+              <div style="font-size: 36px; margin-bottom: 8px">📧</div>
+              <h3
+                style="
+                  margin: 0 0 6px;
+                  color: var(--text-primary);
+                  font-size: 16px;
+                "
+              >
+                Check your inbox
+              </h3>
+              <p style="margin: 0; color: var(--text-muted); font-size: 13px">
+                We sent a 6-digit code to<br />
+                <strong
+                  id="otp-email-display"
+                  style="color: var(--accent)"
+                ></strong>
+              </p>
+            </div>
+
+            <!-- OTP digit boxes -->
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                justify-content: center;
+                margin-bottom: 20px;
+              "
+              id="otp-boxes"
+            >
+              <input
+                class="otp-digit"
+                maxlength="1"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]"
+              />
+              <input
+                class="otp-digit"
+                maxlength="1"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]"
+              />
+              <input
+                class="otp-digit"
+                maxlength="1"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]"
+              />
+              <input
+                class="otp-digit"
+                maxlength="1"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]"
+              />
+              <input
+                class="otp-digit"
+                maxlength="1"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]"
+              />
+              <input
+                class="otp-digit"
+                maxlength="1"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]"
+              />
+            </div>
+
+            <span
+              class="field-error"
+              id="err-otp"
+              style="display: block; text-align: center; margin-bottom: 12px"
+            ></span>
+
+            <button
+              class="btn btn-primary"
+              style="width: 100%"
+              id="reg-verify-btn"
+              onclick="regVerifyOtp()"
+            >
+              Verify Code ✓
+            </button>
+
+            <div style="text-align: center; margin-top: 14px">
+              <span style="color: var(--text-muted); font-size: 13px"
+                >Didn't get it?
+              </span>
+              <button
+                class="btn-link"
+                id="resend-btn"
+                onclick="regResendOtp()"
+                style="font-size: 13px"
+              >
+                Resend code
+              </button>
+              <span
+                id="resend-timer"
+                style="color: var(--text-muted); font-size: 12px; display: none"
+              ></span>
+            </div>
+            <div style="text-align: center; margin-top: 8px">
+              <button
+                class="btn-link"
+                onclick="regGoBack()"
+                style="font-size: 12px; color: var(--text-muted)"
+              >
+                ← Change email
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 3: Success -->
+          <div
+            id="reg-step-3"
+            style="display: none; text-align: center; padding: 20px 0"
+          >
+            <div style="font-size: 48px; margin-bottom: 12px">🎉</div>
+            <h3 style="color: var(--text-primary); margin: 0 0 8px">
+              Account Created!
+            </h3>
+            <p
+              style="
+                color: var(--text-muted);
+                font-size: 13px;
+                margin: 0 0 24px;
+              "
+            >
+              Your email is verified and your account is ready.
+            </p>
+            <button
+              class="btn btn-primary"
+              style="width: 100%"
+              onclick="switchTab('login')"
+            >
+              Sign In Now →
+            </button>
+          </div>
         </div>
 
         <!-- Theme toggle on login page -->
@@ -173,6 +394,10 @@
       </div>
     </div>
 
+    <script
+      data-cfasync="false"
+      src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"
+    ></script>
     <script src="js/api.js"></script>
     <script>
       // Apply saved theme
@@ -232,17 +457,217 @@
       }
 
       async function handleRegister(e) {
-        e.preventDefault();
+        // kept for compatibility — not used in new flow
+      }
+
+      // ── OTP Registration Flow ────────────────────────────
+      let resendCooldown = null;
+
+      function regShowError(id, msg) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = msg;
+      }
+      function regClearErrors() {
+        ["err-name", "err-email", "err-password", "err-otp"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = "";
+        });
+      }
+
+      async function regSendOtp() {
+        regClearErrors();
+        const name = document.getElementById("reg-name").value.trim();
+        const email = document.getElementById("reg-email").value.trim();
+        const password = document.getElementById("reg-password").value.trim();
+        let valid = true;
+
+        if (name.length < 2) {
+          regShowError("err-name", "Name must be at least 2 characters");
+          valid = false;
+        }
+        if (!/^\S+@\S+\.\S+$/.test(email)) {
+          regShowError("err-email", "Please enter a valid email");
+          valid = false;
+        }
+        if (password.length < 6) {
+          regShowError(
+            "err-password",
+            "Password must be at least 6 characters"
+          );
+          valid = false;
+        }
+        if (!valid) return;
+
+        const btn = document.getElementById("reg-send-otp-btn");
+        btn.textContent = "Sending...";
+        btn.disabled = true;
+
+        const { ok, data } = await api.auth.sendOtp({ email, name });
+
+        if (ok) {
+          document.getElementById("otp-email-display").textContent = email;
+          document.getElementById("reg-step-1").style.display = "none";
+          document.getElementById("reg-step-2").style.display = "block";
+          initOtpBoxes();
+          startResendCooldown(30);
+          toast("Verification code sent! Check your inbox.", "success");
+        } else {
+          toast(data.message || "Failed to send OTP", "error");
+          btn.textContent = "Send Verification Code →";
+          btn.disabled = false;
+        }
+      }
+
+      function initOtpBoxes() {
+        const boxes = document.querySelectorAll(".otp-digit");
+        boxes.forEach((box, i) => {
+          box.value = "";
+          box.classList.remove("filled", "error");
+
+          box.addEventListener("input", () => {
+            box.value = box.value.replace(/\D/g, "").slice(-1); // digits only
+            box.classList.toggle("filled", box.value.length > 0);
+            if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+            // auto-verify when all filled
+            if ([...boxes].every((b) => b.value)) regVerifyOtp();
+          });
+
+          box.addEventListener("keydown", (e) => {
+            if (e.key === "Backspace" && !box.value && i > 0) {
+              boxes[i - 1].focus();
+              boxes[i - 1].value = "";
+              boxes[i - 1].classList.remove("filled");
+            }
+            if (e.key === "ArrowLeft" && i > 0) boxes[i - 1].focus();
+            if (e.key === "ArrowRight" && i < boxes.length - 1)
+              boxes[i + 1].focus();
+          });
+
+          box.addEventListener("paste", (e) => {
+            e.preventDefault();
+            const pasted = (e.clipboardData.getData("text") || "")
+              .replace(/\D/g, "")
+              .slice(0, 6);
+            [...pasted].forEach((ch, j) => {
+              if (boxes[j]) {
+                boxes[j].value = ch;
+                boxes[j].classList.add("filled");
+              }
+            });
+            if (pasted.length === 6) regVerifyOtp();
+          });
+        });
+        boxes[0].focus();
+      }
+
+      function getOtpValue() {
+        return [...document.querySelectorAll(".otp-digit")]
+          .map((b) => b.value)
+          .join("");
+      }
+
+      function flashOtpError() {
+        document.querySelectorAll(".otp-digit").forEach((b) => {
+          b.classList.add("error");
+          setTimeout(() => b.classList.remove("error"), 400);
+        });
+      }
+
+      async function regVerifyOtp() {
+        const otp = getOtpValue();
+        const email = document.getElementById("reg-email").value.trim();
+        document.getElementById("err-otp").textContent = "";
+
+        if (otp.length < 6) {
+          document.getElementById("err-otp").textContent =
+            "Please enter all 6 digits";
+          return;
+        }
+
+        const btn = document.getElementById("reg-verify-btn");
+        btn.textContent = "Verifying...";
+        btn.disabled = true;
+
+        const { ok: otpOk, data: otpData } = await api.auth.verifyOtp({
+          otp,
+          email,
+        });
+
+        if (!otpOk) {
+          flashOtpError();
+          document.getElementById("err-otp").textContent =
+            otpData.message || "Incorrect code. Try again.";
+          btn.textContent = "Verify Code ✓";
+          btn.disabled = false;
+          return;
+        }
+
+        // OTP verified — now register
+        btn.textContent = "Creating account...";
         const { ok, data } = await api.auth.register({
-          name: document.getElementById("reg-name").value,
-          email: document.getElementById("reg-email").value,
-          password: document.getElementById("reg-password").value,
+          name: document.getElementById("reg-name").value.trim(),
+          email,
+          password: document.getElementById("reg-password").value.trim(),
           role: document.getElementById("reg-role").value,
         });
+
         if (ok) {
-          toast("Account created! Please sign in.", "success");
-          switchTab("login");
-        } else toast(data.message, "error");
+          document.getElementById("reg-step-2").style.display = "none";
+          document.getElementById("reg-step-3").style.display = "block";
+          clearInterval(resendCooldown);
+        } else {
+          document.getElementById("err-otp").textContent =
+            data.message || "Registration failed.";
+          btn.textContent = "Verify Code ✓";
+          btn.disabled = false;
+        }
+      }
+
+      async function regResendOtp() {
+        const name = document.getElementById("reg-name").value.trim();
+        const email = document.getElementById("reg-email").value.trim();
+        document.getElementById("err-otp").textContent = "";
+        document.querySelectorAll(".otp-digit").forEach((b) => {
+          b.value = "";
+          b.classList.remove("filled");
+        });
+
+        const { ok, data } = await api.auth.sendOtp({ email, name });
+        if (ok) {
+          toast("New code sent!", "success");
+          startResendCooldown(30);
+        } else {
+          toast(data.message || "Failed to resend", "error");
+        }
+      }
+
+      function startResendCooldown(seconds) {
+        const btn = document.getElementById("resend-btn");
+        const timer = document.getElementById("resend-timer");
+        btn.style.display = "none";
+        timer.style.display = "inline";
+        let remaining = seconds;
+        timer.textContent = `Resend in ${remaining}s`;
+        clearInterval(resendCooldown);
+        resendCooldown = setInterval(() => {
+          remaining--;
+          if (remaining <= 0) {
+            clearInterval(resendCooldown);
+            btn.style.display = "inline";
+            timer.style.display = "none";
+          } else {
+            timer.textContent = `Resend in ${remaining}s`;
+          }
+        }, 1000);
+      }
+
+      function regGoBack() {
+        document.getElementById("reg-step-2").style.display = "none";
+        document.getElementById("reg-step-1").style.display = "block";
+        clearInterval(resendCooldown);
+        document.getElementById("reg-send-otp-btn").textContent =
+          "Send Verification Code →";
+        document.getElementById("reg-send-otp-btn").disabled = false;
       }
     </script>
   </body>

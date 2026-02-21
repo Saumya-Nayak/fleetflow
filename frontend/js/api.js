@@ -31,6 +31,8 @@ const api = {
     logout: () => api.post("/logout"),
     register: (b) => api.post("/register", b),
     me: () => api.get("/me"),
+    sendOtp: (b) => api.post("/send-otp", b),
+    verifyOtp: (b) => api.post("/verify-otp", b),
   },
   dashboard: {
     get: () => api.get("/dashboard"),

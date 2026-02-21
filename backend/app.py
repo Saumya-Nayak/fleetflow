@@ -4,7 +4,13 @@ from datetime import datetime, date, timedelta
 import pymysql
 import pymysql.cursors
 from werkzeug.security import generate_password_hash, check_password_hash
+import smtplib, random, string
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 app = Flask(__name__)
 app.secret_key = 'fleetflow_secret_key_2026'
 CORS(app, supports_credentials=True, origins=[
@@ -14,15 +20,17 @@ CORS(app, supports_credentials=True, origins=[
     'http://localhost:5501',
     'null'
 ])
+GMAIL_USER = os.getenv("GMAIL_USER")
+GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 
 # ─── MySQL Config ───────────────────────────────────────────
 DB_CONFIG = {
-    'host':        'localhost',
-    'user':        'root',
-    'password':    '',       # ← Change this to YOUR MySQL password
-    'database':    'fleetflow',
+    'host': os.getenv("DB_HOST"),
+    'user': os.getenv("DB_USER"),
+    'password': os.getenv("DB_PASSWORD"),
+    'database': os.getenv("DB_NAME"),
     'cursorclass': pymysql.cursors.DictCursor,
-    'charset':     'utf8mb4'
+    'charset': 'utf8mb4'
 }
 
 def get_db():
@@ -108,17 +116,137 @@ def me():
     return success(user)
 
 
+# ─── OTP Helpers ────────────────────────────────────────────
+def generate_otp():
+    return ''.join(random.choices(string.digits, k=6))
+
+def send_otp_email(to_email, otp_code, name="User"):
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "🚛 FleetFlow — Your Verification Code"
+        msg["From"]    = f"FleetFlow <{GMAIL_USER}>"
+        msg["To"]      = to_email
+
+        plain = f"Hi {name},\n\nYour FleetFlow verification code: {otp_code}\n\nExpires in 10 minutes. Do not share this code.\n\n— FleetFlow Team"
+
+        html = f"""<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;padding:40px 20px;">
+<tr><td align="center">
+<table width="460" cellpadding="0" cellspacing="0" style="background:#1e293b;border-radius:16px;overflow:hidden;">
+  <tr><td style="background:linear-gradient(135deg,#6366f1,#14b8a6);padding:28px 40px;text-align:center;">
+    <div style="font-size:32px;margin-bottom:6px;">🚛</div>
+    <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">FleetFlow</h1>
+    <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:12px;">Fleet &amp; Logistics Management</p>
+  </td></tr>
+  <tr><td style="padding:32px 40px;">
+    <p style="color:#94a3b8;margin:0 0 6px;font-size:14px;">Hello, <strong style="color:#e2e8f0;">{name}</strong> 👋</p>
+    <p style="color:#64748b;font-size:13px;margin:0 0 24px;line-height:1.6;">Use the code below to verify your email and complete registration.</p>
+    <div style="background:#0f172a;border:2px solid #6366f1;border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
+      <p style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:2px;margin:0 0 10px;">Verification Code</p>
+      <div style="font-size:40px;font-weight:700;letter-spacing:10px;color:#6366f1;font-family:'Courier New',monospace;">{otp_code}</div>
+      <p style="color:#64748b;font-size:12px;margin:10px 0 0;">⏱ Expires in <strong style="color:#f59e0b;">10 minutes</strong></p>
+    </div>
+    <div style="background:#1e3a5f;border-left:3px solid #3b82f6;border-radius:4px;padding:12px 16px;margin-bottom:20px;">
+      <p style="color:#93c5fd;font-size:12px;margin:0;line-height:1.5;">🔒 FleetFlow will never ask for this code over phone or chat. Do not share it.</p>
+    </div>
+    <p style="color:#475569;font-size:12px;margin:0;">If you didn't request this, you can safely ignore this email.</p>
+  </td></tr>
+  <tr><td style="background:#0f172a;padding:16px 40px;text-align:center;border-top:1px solid #1e293b;">
+    <p style="color:#334155;font-size:11px;margin:0;">© 2026 FleetFlow · This is an automated email, do not reply.</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>"""
+
+        msg.attach(MIMEText(plain, "plain"))
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASS)
+            server.sendmail(GMAIL_USER, to_email, msg.as_string())
+        return True
+    except Exception as e:
+        print(f"[EMAIL ERROR] {e}")
+        return False
+
+
+# ─── OTP Routes ─────────────────────────────────────────────
+@app.route('/api/send-otp', methods=['POST'])
+def send_otp():
+    data  = request.json or {}
+    email = data.get('email', '').strip().lower()
+    name  = data.get('name', 'User').strip()
+
+    if not email:
+        return error("Email is required")
+
+    # Check not already registered
+    db  = get_db(); cur = db.cursor()
+    cur.execute("SELECT id FROM users WHERE email=%s", (email,))
+    existing = cur.fetchone()
+    cur.close(); db.close()
+
+    if existing:
+        return error("This email is already registered. Please sign in instead.", 409)
+
+    otp = generate_otp()
+    session['otp']          = otp
+    session['otp_email']    = email
+    session['otp_expires']  = (datetime.now() + timedelta(minutes=10)).isoformat()
+    session['otp_verified'] = False
+
+    sent = send_otp_email(email, otp, name)
+    if not sent:
+        return error("Failed to send OTP. Check GMAIL_USER and GMAIL_APP_PASS in app.py.", 500)
+
+    print(f"[DEV OTP] {email} → {otp}")   # visible in Flask console for testing
+    return success(msg=f"OTP sent to {email}")
+
+
+@app.route('/api/verify-otp', methods=['POST'])
+def verify_otp():
+    data      = request.json or {}
+    submitted = data.get('otp', '').strip()
+    email     = data.get('email', '').strip().lower()
+
+    stored_otp    = session.get('otp')
+    stored_email  = session.get('otp_email', '')
+    expires_at    = session.get('otp_expires')
+
+    if not stored_otp:
+        return error("No OTP sent. Please request a new code.")
+    if stored_email != email:
+        return error("OTP was sent to a different email.")
+    if expires_at and datetime.now() > datetime.fromisoformat(expires_at):
+        session.pop('otp', None)
+        return error("OTP expired. Please request a new code.", 410)
+    if submitted != stored_otp:
+        return error("Incorrect OTP. Please try again.")
+
+    session['otp_verified'] = True
+    session.pop('otp', None)   # consume — can't reuse
+    return success(msg="Email verified successfully!")
+
+
 @app.route('/api/register', methods=['POST'])
 def register():
     data     = request.json or {}
     name     = data.get('name', '').strip()
-    email    = data.get('email', '').strip()
+    email    = data.get('email', '').strip().lower()
     password = data.get('password', '').strip()
     role     = data.get('role', 'dispatcher')
     if not all([name, email, password]):
         return error("All fields required")
     if role not in ['dispatcher', 'manager', 'safety_officer', 'analyst']:
         return error("Invalid role")
+
+    # Enforce OTP verification
+    if not session.get('otp_verified'):
+        return error("Email not verified. Please verify with OTP first.", 403)
+    if session.get('otp_email', '').lower() != email:
+        return error("Verified email does not match. Please restart verification.", 400)
+
     try:
         db  = get_db()
         cur = db.cursor()
@@ -126,7 +254,10 @@ def register():
                     (name, email, generate_password_hash(password), role))
         db.commit()
         cur.close(); db.close()
-        return success(msg="User registered successfully")
+        # Clear OTP session state
+        for k in ['otp_verified', 'otp_email', 'otp_expires']:
+            session.pop(k, None)
+        return success(msg="Account created successfully! Please sign in.")
     except Exception as e:
         return error(f"Email may already exist: {str(e)}")
 
