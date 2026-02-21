@@ -1,51 +1,239 @@
-// app.js - FleetFlow Main Application Router
+// ═══════════════════════════════════════════════════════════
+//  FleetFlow — Role-Based Application
+// ═══════════════════════════════════════════════════════════
 
-// ── Router ────────────────────────────────────────────────
-const routes = {
-  dashboard: renderDashboard,
-  vehicles: renderVehicles,
-  trips: renderTrips,
-  maintenance: renderMaintenance,
-  expenses: renderExpenses,
-  drivers: renderDrivers,
-  analytics: renderAnalytics,
+let currentPage = "";
+
+// ── Role Configurations ───────────────────────────────────
+const ROLE_CONFIG = {
+  manager: {
+    label: "👨‍💼 Fleet Manager",
+    color: "accent",
+    home: "mgr-dashboard",
+    pages: [
+      {
+        id: "mgr-dashboard",
+        label: "Command Center",
+        icon: "🏠",
+        section: "Overview",
+      },
+      {
+        id: "mgr-vehicles",
+        label: "Vehicle Registry",
+        icon: "🚛",
+        section: "Fleet",
+      },
+      {
+        id: "mgr-maintenance",
+        label: "Maintenance Logs",
+        icon: "🔧",
+        section: "Fleet",
+      },
+      {
+        id: "mgr-analytics",
+        label: "Fleet Analytics",
+        icon: "📊",
+        section: "Insights",
+      },
+    ],
+  },
+  dispatcher: {
+    label: "📦 Dispatcher",
+    color: "teal",
+    home: "dsp-dashboard",
+    pages: [
+      {
+        id: "dsp-dashboard",
+        label: "Dispatch Center",
+        icon: "🏠",
+        section: "Overview",
+      },
+      {
+        id: "dsp-trips",
+        label: "Trip Dispatcher",
+        icon: "🗺️",
+        section: "Operations",
+      },
+      {
+        id: "dsp-vehicles",
+        label: "Available Vehicles",
+        icon: "🚛",
+        section: "Operations",
+      },
+      {
+        id: "dsp-drivers",
+        label: "Available Drivers",
+        icon: "👤",
+        section: "Operations",
+      },
+    ],
+  },
+  safety_officer: {
+    label: "🛡️ Safety Officer",
+    color: "warning",
+    home: "saf-dashboard",
+    pages: [
+      {
+        id: "saf-dashboard",
+        label: "Safety Center",
+        icon: "🏠",
+        section: "Overview",
+      },
+      {
+        id: "saf-drivers",
+        label: "Driver Profiles",
+        icon: "👤",
+        section: "Compliance",
+      },
+      {
+        id: "saf-compliance",
+        label: "License Tracker",
+        icon: "📋",
+        section: "Compliance",
+      },
+    ],
+  },
+  analyst: {
+    label: "💰 Financial Analyst",
+    color: "success",
+    home: "fin-dashboard",
+    pages: [
+      {
+        id: "fin-dashboard",
+        label: "Finance Center",
+        icon: "🏠",
+        section: "Overview",
+      },
+      {
+        id: "fin-expenses",
+        label: "Expense Logger",
+        icon: "💰",
+        section: "Finance",
+      },
+      {
+        id: "fin-reports",
+        label: "Reports & Export",
+        icon: "📈",
+        section: "Finance",
+      },
+    ],
+  },
 };
 
-let currentPage = "dashboard";
+// ── Build Sidebar per Role ────────────────────────────────
+function setupRoleUI(role) {
+  const cfg = ROLE_CONFIG[role] || ROLE_CONFIG.manager;
+  document.getElementById("role-label").textContent = cfg.label;
 
-function navigate(page) {
-  currentPage = page;
-  document.querySelectorAll(".nav-link").forEach((l) => {
-    l.classList.toggle("active", l.dataset.page === page);
+  const badge = document.getElementById("role-badge");
+  badge.innerHTML = `<span class="pill pill-${cfg.color}" style="font-size:12px">${cfg.label}</span>`;
+
+  let html = "";
+  let lastSection = "";
+  cfg.pages.forEach((p) => {
+    if (p.section !== lastSection) {
+      html += `<div class="nav-section-label">${p.section}</div>`;
+      lastSection = p.section;
+    }
+    html += `<a class="nav-link" data-page="${p.id}" onclick="navigate('${p.id}')">${p.icon} ${p.label}</a>`;
   });
-  const pageTitles = {
-    dashboard: { title: "Command Center", sub: "Real-time fleet overview" },
-    vehicles: { title: "Vehicle Registry", sub: "Manage your fleet assets" },
-    trips: { title: "Trip Dispatcher", sub: "Create & track deliveries" },
-    maintenance: {
-      title: "Maintenance Logs",
-      sub: "Service & repair tracking",
-    },
-    expenses: {
-      title: "Expense & Fuel Log",
-      sub: "Financial tracking per trip",
-    },
-    drivers: { title: "Driver Profiles", sub: "Performance & compliance" },
-    analytics: {
-      title: "Analytics & Reports",
-      sub: "Data-driven fleet insights",
-    },
-  };
-  const info = pageTitles[page] || {};
-  document.getElementById("topbar-title").textContent = info.title || page;
-  document.getElementById("topbar-subtitle").textContent = info.sub || "";
-  document.querySelector(".page-content").innerHTML =
-    '<div class="loading-overlay"><div class="spinner"></div> Loading...</div>';
-  if (routes[page]) routes[page]();
+  document.getElementById("sidebar-nav").innerHTML = html;
+  navigate(cfg.home);
 }
 
-// ── DASHBOARD ─────────────────────────────────────────────
-async function renderDashboard() {
+// ── Router ────────────────────────────────────────────────
+function navigate(page) {
+  currentPage = page;
+  document
+    .querySelectorAll(".nav-link")
+    .forEach((l) => l.classList.toggle("active", l.dataset.page === page));
+
+  const titles = {
+    "mgr-dashboard": { t: "Command Center", s: "Fleet overview for managers" },
+    "mgr-vehicles": { t: "Vehicle Registry", s: "Full fleet asset management" },
+    "mgr-maintenance": {
+      t: "Maintenance Logs",
+      s: "Service & repair tracking",
+    },
+    "mgr-analytics": { t: "Fleet Analytics", s: "Performance & ROI insights" },
+    "dsp-dashboard": { t: "Dispatch Center", s: "Active trips & cargo queue" },
+    "dsp-trips": { t: "Trip Dispatcher", s: "Create & manage deliveries" },
+    "dsp-vehicles": {
+      t: "Available Vehicles",
+      s: "Vehicles ready for dispatch",
+    },
+    "dsp-drivers": { t: "Available Drivers", s: "On-duty driver roster" },
+    "saf-dashboard": { t: "Safety Center", s: "Driver compliance overview" },
+    "saf-drivers": { t: "Driver Profiles", s: "Performance & safety records" },
+    "saf-compliance": { t: "License Tracker", s: "Expiry monitoring & alerts" },
+    "fin-dashboard": { t: "Finance Center", s: "Costs, revenue & profit" },
+    "fin-expenses": { t: "Expense Logger", s: "Fuel & trip cost logging" },
+    "fin-reports": { t: "Reports & Export", s: "Monthly financial analysis" },
+  };
+
+  const info = titles[page] || { t: page, s: "" };
+  document.getElementById("topbar-title").textContent = info.t;
+  document.getElementById("topbar-subtitle").textContent = info.s;
+  document.querySelector(".page-content").innerHTML =
+    '<div class="loading-overlay"><div class="spinner"></div> Loading...</div>';
+
+  const handlers = {
+    "mgr-dashboard": renderManagerDashboard,
+    "mgr-vehicles": renderManagerVehicles,
+    "mgr-maintenance": renderManagerMaintenance,
+    "mgr-analytics": renderManagerAnalytics,
+    "dsp-dashboard": renderDispatcherDashboard,
+    "dsp-trips": renderDispatcherTrips,
+    "dsp-vehicles": renderDispatcherVehicles,
+    "dsp-drivers": renderDispatcherDrivers,
+    "saf-dashboard": renderSafetyDashboard,
+    "saf-drivers": renderSafetyDrivers,
+    "saf-compliance": renderSafetyCompliance,
+    "fin-dashboard": renderFinanceDashboard,
+    "fin-expenses": renderFinanceExpenses,
+    "fin-reports": renderFinanceReports,
+  };
+  if (handlers[page]) handlers[page]();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SHARED HELPERS
+// ═══════════════════════════════════════════════════════════
+function setContent(html) {
+  document.querySelector(
+    ".page-content"
+  ).innerHTML = `<div class="page-enter">${html}</div>`;
+}
+
+function kpiCard(label, value, color, emoji, sub = "") {
+  return `
+    <div class="kpi-card ${color}">
+      <div style="font-size:28px;margin-bottom:10px">${emoji}</div>
+      <div class="kpi-value">${value}</div>
+      <div class="kpi-label">${label}</div>
+      ${
+        sub
+          ? `<div class="fs-12 text-muted" style="margin-top:4px">${sub}</div>`
+          : ""
+      }
+    </div>`;
+}
+
+function pageHeader(title, subtitle, btn = "") {
+  return `
+    <div class="page-header">
+      <div class="page-title-group">
+        <h1>${title}</h1>
+        <p>${subtitle}</p>
+      </div>
+      <div class="page-actions">${btn}</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  👨‍💼 MANAGER PAGES
+// ═══════════════════════════════════════════════════════════
+async function renderManagerDashboard() {
   const { ok, data } = await api.dashboard.get();
   if (!ok) {
     toast(data.message, "error");
@@ -53,109 +241,107 @@ async function renderDashboard() {
   }
   const d = data.data;
 
-  document.querySelector(".page-content").innerHTML = `
-      <div class="page-enter">
-        <div class="kpi-grid">
-          ${kpiCard(
-            "Active Fleet",
-            d.active_fleet,
-            "accent",
-            `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/></svg>`,
-            "On Trip"
-          )}
-          ${kpiCard(
-            "Maintenance Alerts",
-            d.maintenance_alerts,
-            "warning",
-            `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z"/></svg>`,
-            "In Shop"
-          )}
-          ${kpiCard(
-            "Utilization Rate",
-            `${d.utilization_rate}%`,
-            "teal",
-            `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>`,
-            "Fleet"
-          )}
-          ${kpiCard(
-            "Pending Cargo",
-            d.pending_cargo,
-            "danger",
-            `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>`,
-            "Awaiting"
-          )}
-          ${
-            d.expired_licenses > 0
-              ? kpiCard(
-                  "Expired Licenses",
-                  d.expired_licenses,
-                  "danger",
-                  `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>`,
-                  "⚠️ Action needed"
-                )
-              : ""
-          }
+  setContent(`
+    <div class="role-header manager-header">
+      <div>
+        <h2>👨‍💼 Fleet Manager Dashboard</h2>
+        <p>Full operational overview — vehicles, maintenance, and fleet performance</p>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      ${kpiCard("Active Fleet", d.active_fleet, "accent", "🚛", "On Trip now")}
+      ${kpiCard(
+        "In Shop",
+        d.maintenance_alerts,
+        "warning",
+        "🔧",
+        "Under service"
+      )}
+      ${kpiCard(
+        "Utilization Rate",
+        d.utilization_rate + "%",
+        "teal",
+        "📈",
+        "Fleet in use"
+      )}
+      ${kpiCard(
+        "Pending Cargo",
+        d.pending_cargo,
+        "danger",
+        "📦",
+        "Awaiting dispatch"
+      )}
+      ${
+        d.expired_licenses > 0
+          ? kpiCard(
+              "Expired Licenses",
+              d.expired_licenses,
+              "danger",
+              "⚠️",
+              "Needs attention"
+            )
+          : kpiCard("Licenses OK", "✅", "success", "🛡️", "All valid")
+      }
+    </div>
+
+    ${
+      d.expired_licenses > 0
+        ? `
+    <div class="alert alert-danger">
+      ⚠️ <strong>${d.expired_licenses} driver(s)</strong> have expired licenses.
+      Contact Safety Officer immediately.
+    </div>`
+        : ""
+    }
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:4px">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">⚡ Quick Actions</span>
         </div>
-  
-        ${
-          d.expired_licenses > 0
-            ? `<div class="alert alert-danger mb-3">⚠️ <strong>${d.expired_licenses} driver(s)</strong> have expired licenses and cannot be assigned to trips. <a href="#" onclick="navigate('drivers')" style="color:inherit;font-weight:700">Review Drivers →</a></div>`
-            : ""
-        }
-  
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Recent Trips</span>
-            <button class="btn btn-sm btn-primary" onclick="navigate('trips')">View All</button>
-          </div>
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead><tr>
-                <th>#</th><th>Vehicle</th><th>Type</th><th>Route</th><th>Driver</th><th>Status</th><th>Date</th>
-              </tr></thead>
-              <tbody>
-                ${
-                  d.recent_trips.length
-                    ? d.recent_trips
-                        .map(
-                          (t) => `
-                  <tr>
-                    <td class="mono">#${t.id}</td>
-                    <td class="fw-600">${t.license_plate}</td>
-                    <td>${t.fleet_type}</td>
-                    <td><span class="text-muted">${t.origin}</span> → <strong>${
-                            t.destination
-                          }</strong></td>
-                    <td>${t.driver}</td>
-                    <td>${statusPill(t.status)}</td>
-                    <td class="text-muted fs-12">${fmtDate(t.created_at)}</td>
-                  </tr>
-                `
-                        )
-                        .join("")
-                    : '<tr><td colspan="7" class="table-empty">No trips yet</td></tr>'
-                }
-              </tbody>
-            </table>
-          </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn btn-primary" onclick="navigate('mgr-vehicles')" style="justify-content:flex-start">
+            🚛 &nbsp; Manage Vehicles
+          </button>
+          <button class="btn btn-secondary" onclick="navigate('mgr-maintenance')" style="justify-content:flex-start">
+            🔧 &nbsp; Log Maintenance
+          </button>
+          <button class="btn btn-secondary" onclick="navigate('mgr-analytics')" style="justify-content:flex-start">
+            📊 &nbsp; View Analytics
+          </button>
         </div>
       </div>
-    `;
-}
 
-function kpiCard(label, value, color, iconSvg, sub = "") {
-  return `
-      <div class="kpi-card ${color}">
-        <div class="kpi-icon ${color}">${iconSvg}</div>
-        <div class="kpi-value">${value}</div>
-        <div class="kpi-label">${label}</div>
-        ${sub ? `<div class="fs-12 text-muted mt-1">${sub}</div>` : ""}
+      <div class="card">
+        <div class="card-header"><span class="card-title">🕐 Recent Trips</span></div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Vehicle</th><th>Route</th><th>Status</th></tr></thead>
+            <tbody>
+              ${
+                d.recent_trips
+                  .slice(0, 5)
+                  .map(
+                    (t) => `
+                <tr>
+                  <td class="mono fw-600">${t.license_plate}</td>
+                  <td class="fs-12">${t.origin} → ${t.destination}</td>
+                  <td>${statusPill(t.status)}</td>
+                </tr>`
+                  )
+                  .join("") ||
+                '<tr><td colspan="3" class="table-empty">No trips</td></tr>'
+              }
+            </tbody>
+          </table>
+        </div>
       </div>
-    `;
+    </div>
+  `);
 }
 
-// ── VEHICLES ──────────────────────────────────────────────
-async function renderVehicles(filter = "") {
+async function renderManagerVehicles(filter = "") {
   const { ok, data } = await api.vehicles.list(filter);
   if (!ok) {
     toast(data.message, "error");
@@ -163,455 +349,84 @@ async function renderVehicles(filter = "") {
   }
   const vehicles = data.data;
 
-  document.querySelector(".page-content").innerHTML = `
-      <div class="page-enter">
-        <div class="page-header">
-          <div class="page-title-group">
-            <h1>Vehicle Registry</h1>
-            <p>Total: <strong>${vehicles.length}</strong> vehicles</p>
-          </div>
-          <div class="page-actions">
-            <button class="btn btn-primary" onclick="showAddVehicleModal()">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-              New Vehicle
-            </button>
-          </div>
-        </div>
-        <div class="toolbar">
-          <div class="search-box">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-            <input class="search-input" placeholder="Search plate, name, model..." id="v-search" oninput="debounceVehicleSearch(this.value)">
-          </div>
-          <select class="filter-select" onchange="applyVehicleFilter()">
-            <option value="">All Types</option>
-            <option value="Truck">Truck</option>
-            <option value="Van">Van</option>
-            <option value="Bike">Bike</option>
-          </select>
-          <select class="filter-select" id="v-status-filter" onchange="applyVehicleFilter()">
-            <option value="">All Status</option>
-            <option value="Available">Available</option>
-            <option value="On Trip">On Trip</option>
-            <option value="In Shop">In Shop</option>
-            <option value="Retired">Retired</option>
-          </select>
-        </div>
-        <div class="table-card">
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead><tr>
-                <th>Plate</th><th>Name / Model</th><th>Type</th>
-                <th>Capacity (kg)</th><th>Odometer</th><th>Region</th>
-                <th>Status</th><th>Actions</th>
-              </tr></thead>
-              <tbody id="vehicles-tbody">
-                ${
-                  vehicles.length
-                    ? vehicles.map((v) => vehicleRow(v)).join("")
-                    : `<tr><td colspan="8"><div class="table-empty">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12"/></svg>
-                    No vehicles found</div></td></tr>`
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
+  setContent(`
+    ${pageHeader(
+      "🚛 Vehicle Registry",
+      `${vehicles.length} total vehicles`,
+      `<button class="btn btn-primary" onclick="showAddVehicleModal()">+ New Vehicle</button>`
+    )}
+
+    <div class="toolbar">
+      <div class="search-box">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+        <input class="search-input" placeholder="Search plate, name..." id="v-search" oninput="debounce(()=>applyVehicleFilter(),400)">
       </div>
-    `;
-}
+      <select class="filter-select" id="v-type" onchange="applyVehicleFilter()">
+        <option value="">All Types</option>
+        <option>Truck</option><option>Van</option><option>Bike</option>
+      </select>
+      <select class="filter-select" id="v-status" onchange="applyVehicleFilter()">
+        <option value="">All Status</option>
+        <option>Available</option><option>On Trip</option><option>In Shop</option><option>Retired</option>
+      </select>
+    </div>
 
-function vehicleRow(v) {
-  return `
-      <tr>
-        <td class="mono fw-600">${v.license_plate}</td>
-        <td><div class="fw-600">${v.name}</div><div class="fs-12 text-muted">${
-    v.model
-  }</div></td>
-        <td>${v.type}</td>
-        <td class="mono">${Number(v.max_capacity_kg).toLocaleString()}</td>
-        <td class="mono">${Number(v.odometer_km).toLocaleString()} km</td>
-        <td>${v.region || "—"}</td>
-        <td>${statusPill(v.status)}</td>
-        <td>
-          <div class="flex gap-2">
-            <button class="btn btn-sm btn-secondary" onclick="showEditVehicleModal(${
-              v.id
-            })" title="Edit">✏️</button>
-            <button class="btn btn-sm ${
-              v.status === "In Shop" ? "btn-success" : "btn-warning"
-            }"
-              onclick="toggleVehicleService(${v.id}, '${
-    v.status
-  }')" title="Toggle Shop">
-              ${v.status === "In Shop" ? "✅ Done" : "🔧 Shop"}
-            </button>
-            <button class="btn btn-sm btn-danger" onclick="retireVehicle(${
-              v.id
-            })" title="Retire">🗑</button>
-          </div>
-        </td>
-      </tr>
-    `;
-}
-
-let vehicleSearchTimer;
-function debounceVehicleSearch(val) {
-  clearTimeout(vehicleSearchTimer);
-  vehicleSearchTimer = setTimeout(() => applyVehicleFilter(), 400);
-}
-
-function applyVehicleFilter() {
-  const search = document.getElementById("v-search")?.value || "";
-  const type = document.querySelectorAll(".filter-select")[0]?.value || "";
-  const status = document.getElementById("v-status-filter")?.value || "";
-  let qs = [];
-  if (search) qs.push(`search=${encodeURIComponent(search)}`);
-  if (type) qs.push(`type=${type}`);
-  if (status) qs.push(`status=${status}`);
-  renderVehicles(qs.length ? "?" + qs.join("&") : "");
-}
-
-function showAddVehicleModal() {
-  openModal(`
-      <div class="modal-header">
-        <span class="modal-title">🚛 Register New Vehicle</span>
-        <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr>
+            <th>Plate</th><th>Vehicle</th><th>Type</th><th>Max Load</th>
+            <th>Odometer</th><th>Region</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody>
+            ${
+              vehicles.length
+                ? vehicles
+                    .map(
+                      (v) => `
+              <tr>
+                <td class="mono fw-600">${v.license_plate}</td>
+                <td><div class="fw-600">${
+                  v.name
+                }</div><div class="fs-12 text-muted">${v.model}</div></td>
+                <td>${v.type}</td>
+                <td class="mono">${Number(
+                  v.max_capacity_kg
+                ).toLocaleString()} kg</td>
+                <td class="mono">${Number(
+                  v.odometer_km
+                ).toLocaleString()} km</td>
+                <td>${v.region || "—"}</td>
+                <td>${statusPill(v.status)}</td>
+                <td>
+                  <div class="flex gap-2">
+                    <button class="btn btn-sm btn-secondary" onclick="showEditVehicleModal(${JSON.stringify(
+                      v
+                    ).replace(/"/g, "&quot;")})">✏️</button>
+                    <button class="btn btn-sm ${
+                      v.status === "In Shop" ? "btn-success" : "btn-warning"
+                    }"
+                      onclick="toggleVehicleService(${v.id},'${v.status}')">
+                      ${v.status === "In Shop" ? "✅" : "🔧"}
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="retireVehicle(${
+                      v.id
+                    })">🗑</button>
+                  </div>
+                </td>
+              </tr>`
+                    )
+                    .join("")
+                : '<tr><td colspan="8"><div class="table-empty">No vehicles found</div></td></tr>'
+            }
+          </tbody>
+        </table>
       </div>
-      <form id="add-vehicle-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Vehicle Name *</label>
-            <input class="form-control" name="name" placeholder="e.g. Tata Prima" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Model *</label>
-            <input class="form-control" name="model" placeholder="e.g. Prima 4028.S" required>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">License Plate *</label>
-            <input class="form-control" name="license_plate" placeholder="GJ-01-AB-1234" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Type *</label>
-            <select class="form-control" name="type" required>
-              <option value="">Select type</option>
-              <option>Truck</option><option>Van</option><option>Bike</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Max Capacity (kg) *</label>
-            <input class="form-control" type="number" name="max_capacity_kg" placeholder="5000" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Odometer (km)</label>
-            <input class="form-control" type="number" name="odometer_km" placeholder="0">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Acquisition Cost (₹)</label>
-            <input class="form-control" type="number" name="acquisition_cost" placeholder="1500000">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Region</label>
-            <input class="form-control" name="region" placeholder="Ahmedabad">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Register Vehicle</button>
-        </div>
-      </form>
-    `);
-  document.getElementById("add-vehicle-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const body = Object.fromEntries(fd.entries());
-    const { ok, data } = await api.vehicles.add(body);
-    if (ok) {
-      toast("Vehicle registered!", "success");
-      closeModal();
-      renderVehicles();
-    } else toast(data.message, "error");
-  };
+    </div>
+  `);
 }
 
-async function toggleVehicleService(id, status) {
-  const { ok, data } = await api.vehicles.toggleService(id);
-  if (ok) {
-    toast(`Vehicle now: ${data.data.new_status}`, "success");
-    renderVehicles();
-  } else toast(data.message, "error");
-}
-
-async function retireVehicle(id) {
-  if (!confirm("Retire this vehicle? It will be marked as Out of Service."))
-    return;
-  const { ok, data } = await api.vehicles.retire(id);
-  if (ok) {
-    toast("Vehicle retired", "success");
-    renderVehicles();
-  } else toast(data.message, "error");
-}
-
-// ── TRIPS ─────────────────────────────────────────────────
-async function renderTrips(filter = "") {
-  const [tripsRes, vehiclesRes, driversRes] = await Promise.all([
-    api.trips.list(filter),
-    api.vehicles.list("?status=Available"),
-    api.drivers.list("?status=On+Duty"),
-  ]);
-  const trips = tripsRes.data?.data || [];
-  const avVehicles = vehiclesRes.data?.data || [];
-  const avDrivers = driversRes.data?.data || [];
-  state.vehicles = avVehicles;
-  state.drivers = avDrivers;
-
-  document.querySelector(".page-content").innerHTML = `
-      <div class="page-enter">
-        <div class="page-header">
-          <div class="page-title-group">
-            <h1>Trip Dispatcher</h1>
-            <p>${trips.length} total trips</p>
-          </div>
-          <div class="page-actions">
-            <button class="btn btn-primary" onclick="showCreateTripModal()">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-              New Trip
-            </button>
-          </div>
-        </div>
-        <div class="toolbar">
-          <select class="filter-select" onchange="renderTrips(this.value?'?status='+this.value:'')">
-            <option value="">All Status</option>
-            <option value="Draft">Draft</option>
-            <option value="Dispatched">Dispatched</option>
-            <option value="On Trip">On Trip</option>
-            <option value="Completed">Completed</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
-        </div>
-        <div class="table-card">
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead><tr>
-                <th>#</th><th>Vehicle</th><th>Driver</th><th>Route</th>
-                <th>Cargo (kg)</th><th>Revenue</th><th>Status</th><th>Date</th><th>Actions</th>
-              </tr></thead>
-              <tbody>
-                ${
-                  trips.length
-                    ? trips
-                        .map(
-                          (t) => `
-                  <tr>
-                    <td class="mono">#${t.id}</td>
-                    <td><div class="fw-600">${
-                      t.license_plate
-                    }</div><div class="fs-12 text-muted">${
-                            t.fleet_type
-                          }</div></td>
-                    <td>${t.driver_name}</td>
-                    <td><span class="text-muted">${
-                      t.origin
-                    }</span><br><strong>${t.destination}</strong></td>
-                    <td class="mono">${Number(
-                      t.cargo_weight_kg
-                    ).toLocaleString()} / ${Number(
-                            t.max_capacity_kg
-                          ).toLocaleString()}</td>
-                    <td class="mono">${fmtRs(t.revenue)}</td>
-                    <td>${statusPill(t.status)}</td>
-                    <td class="fs-12 text-muted">${fmtDate(t.created_at)}</td>
-                    <td>
-                      <div class="flex gap-2">
-                        ${
-                          t.status === "Dispatched" || t.status === "On Trip"
-                            ? `
-                          <button class="btn btn-sm btn-success" onclick="showCompleteTrip(${t.id})">✅ Complete</button>
-                          <button class="btn btn-sm btn-danger" onclick="cancelTrip(${t.id})">✕ Cancel</button>
-                        `
-                            : ""
-                        }
-                      </div>
-                    </td>
-                  </tr>
-                `
-                        )
-                        .join("")
-                    : '<tr><td colspan="9"><div class="table-empty">No trips found</div></td></tr>'
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    `;
-}
-
-function showCreateTripModal() {
-  const vOptions = state.vehicles
-    .map(
-      (v) =>
-        `<option value="${v.id}" data-cap="${v.max_capacity_kg}">[${v.license_plate}] ${v.name} — ${v.max_capacity_kg}kg</option>`
-    )
-    .join("");
-  const dOptions = state.drivers
-    .map(
-      (d) =>
-        `<option value="${d.id}">${d.name} (${d.license_category})</option>`
-    )
-    .join("");
-
-  openModal(`
-      <div class="modal-header">
-        <span class="modal-title">🗺️ Create New Trip</span>
-        <button class="modal-close" onclick="closeModal()">✕</button>
-      </div>
-      <div id="capacity-alert"></div>
-      <form id="create-trip-form">
-        <div class="form-group">
-          <label class="form-label">Select Vehicle *</label>
-          <select class="form-control" name="vehicle_id" required id="trip-vehicle" onchange="updateCapacity()">
-            <option value="">— Choose available vehicle —</option>
-            ${vOptions || "<option disabled>No available vehicles</option>"}
-          </select>
-          <div class="form-hint" id="capacity-hint">Select a vehicle to see its capacity</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Cargo Weight (kg) *</label>
-          <input class="form-control" type="number" name="cargo_weight_kg" id="trip-cargo" placeholder="e.g. 2500" required oninput="validateCargo()">
-          <div class="form-error hidden" id="cargo-error">⚠️ Exceeds vehicle capacity!</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Select Driver *</label>
-          <select class="form-control" name="driver_id" required>
-            <option value="">— Choose on-duty driver —</option>
-            ${dOptions || "<option disabled>No on-duty drivers</option>"}
-          </select>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Origin *</label>
-            <input class="form-control" name="origin" placeholder="e.g. Ahmedabad" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Destination *</label>
-            <input class="form-control" name="destination" placeholder="e.g. Mumbai" required>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Est. Fuel Cost (₹)</label>
-            <input class="form-control" type="number" name="estimated_fuel_cost" placeholder="5000">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Revenue (₹)</label>
-            <input class="form-control" type="number" name="revenue" placeholder="25000">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="dispatch-btn">🚀 Dispatch Trip</button>
-        </div>
-      </form>
-    `);
-
-  document.getElementById("create-trip-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const body = Object.fromEntries(fd.entries());
-    const { ok, data } = await api.trips.create(body);
-    if (ok) {
-      toast("Trip dispatched!", "success");
-      closeModal();
-      renderTrips();
-    } else toast(data.message, "error");
-  };
-}
-
-function updateCapacity() {
-  const sel = document.getElementById("trip-vehicle");
-  const opt = sel.options[sel.selectedIndex];
-  const cap = opt?.dataset.cap;
-  document.getElementById("capacity-hint").textContent = cap
-    ? `Max capacity: ${Number(cap).toLocaleString()} kg`
-    : "Select a vehicle to see its capacity";
-  validateCargo();
-}
-
-function validateCargo() {
-  const sel = document.getElementById("trip-vehicle");
-  const opt = sel?.options[sel?.selectedIndex];
-  const cap = parseFloat(opt?.dataset.cap || 0);
-  const cargo = parseFloat(document.getElementById("trip-cargo")?.value || 0);
-  const errEl = document.getElementById("cargo-error");
-  const btn = document.getElementById("dispatch-btn");
-  if (cap > 0 && cargo > cap) {
-    errEl?.classList.remove("hidden");
-    if (btn) btn.disabled = true;
-  } else {
-    errEl?.classList.add("hidden");
-    if (btn) btn.disabled = false;
-  }
-}
-
-function showCompleteTrip(id) {
-  openModal(`
-      <div class="modal-header">
-        <span class="modal-title">✅ Complete Trip #${id}</span>
-        <button class="modal-close" onclick="closeModal()">✕</button>
-      </div>
-      <form id="complete-trip-form">
-        <div class="form-group">
-          <label class="form-label">Final Odometer Reading (km)</label>
-          <input class="form-control" type="number" name="end_odometer" placeholder="e.g. 47500" required>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Actual Fuel Cost (₹)</label>
-            <input class="form-control" type="number" name="actual_fuel_cost" placeholder="0">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Final Revenue (₹)</label>
-            <input class="form-control" type="number" name="revenue" placeholder="0">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-success">Mark Completed</button>
-        </div>
-      </form>
-    `);
-  document.getElementById("complete-trip-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const body = Object.fromEntries(fd.entries());
-    const { ok, data } = await api.trips.complete(id, body);
-    if (ok) {
-      toast("Trip completed!", "success");
-      closeModal();
-      renderTrips();
-    } else toast(data.message, "error");
-  };
-}
-
-async function cancelTrip(id) {
-  if (!confirm("Cancel this trip? Vehicles and drivers will be released."))
-    return;
-  const { ok, data } = await api.trips.cancel(id);
-  if (ok) {
-    toast("Trip cancelled", "warning");
-    renderTrips();
-  } else toast(data.message, "error");
-}
-
-// ── MAINTENANCE ───────────────────────────────────────────
-async function renderMaintenance() {
+async function renderManagerMaintenance() {
   const [mRes, vRes] = await Promise.all([
     api.maintenance.list(),
     api.vehicles.list(),
@@ -619,140 +434,935 @@ async function renderMaintenance() {
   const logs = mRes.data?.data || [];
   const vehicles = vRes.data?.data || [];
 
-  document.querySelector(".page-content").innerHTML = `
-      <div class="page-enter">
-        <div class="page-header">
-          <div class="page-title-group"><h1>Maintenance & Service Logs</h1>
-            <p>Logging a service automatically sets vehicle to <strong>In Shop</strong></p>
-          </div>
-          <button class="btn btn-primary" onclick="showAddMaintenanceModal(${JSON.stringify(
-            vehicles
-          ).replace(/"/g, "&quot;")})">
-            + Log Service
+  const activeLogs = logs.filter((l) => l.status !== "Completed");
+
+  setContent(`
+    ${pageHeader(
+      "🔧 Maintenance & Service Logs",
+      `${activeLogs.length} active service(s) — vehicles auto-set to In Shop`,
+      `<button class="btn btn-primary" onclick="showAddMaintenanceModal(${JSON.stringify(
+        vehicles
+      ).replace(/"/g, "&quot;")})">+ Log Service</button>`
+    )}
+
+    <div class="alert alert-warning" style="margin-bottom:20px">
+      🔁 <strong>Auto-Rule:</strong> Adding a service log automatically sets vehicle to <strong>In Shop</strong> and hides it from Dispatchers.
+    </div>
+
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr>
+            <th>Log #</th><th>Vehicle</th><th>Issue / Service</th>
+            <th>Cost</th><th>Date</th><th>Status</th><th>Action</th>
+          </tr></thead>
+          <tbody>
+            ${
+              logs.length
+                ? logs
+                    .map(
+                      (l) => `
+              <tr>
+                <td class="mono">#${l.id}</td>
+                <td><div class="fw-600">${l.vehicle_name}</div>
+                    <div class="fs-12 text-muted">${l.license_plate}</div></td>
+                <td>${l.issue_service}<br>
+                    <span class="fs-12 text-muted">${
+                      l.description || ""
+                    }</span></td>
+                <td class="mono">${fmtRs(l.cost)}</td>
+                <td class="fs-12">${fmtDate(l.date)}</td>
+                <td>${statusPill(l.status)}</td>
+                <td>${
+                  l.status !== "Completed"
+                    ? `<button class="btn btn-sm btn-success" onclick="resolveMaintenance(${l.id})">✅ Mark Done</button>`
+                    : '<span class="text-muted fs-12">Resolved</span>'
+                }</td>
+              </tr>`
+                    )
+                    .join("")
+                : '<tr><td colspan="7"><div class="table-empty">No maintenance logs</div></td></tr>'
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `);
+}
+
+async function renderManagerAnalytics() {
+  const { ok, data } = await api.analytics.get();
+  if (!ok) {
+    toast(data.message, "error");
+    return;
+  }
+  const a = data.data;
+  const maxCost = Math.max(
+    ...a.vehicle_efficiency.map((v) => parseFloat(v.total_cost) || 0),
+    1
+  );
+
+  setContent(`
+    ${pageHeader(
+      "📊 Fleet Analytics & Financial Reports",
+      "ROI, fuel efficiency, cost analysis"
+    )}
+
+    <div class="kpi-grid">
+      ${kpiCard("Total Revenue", fmtRs(a.total_revenue), "teal", "💰")}
+      ${kpiCard("Fuel Cost", fmtRs(a.total_fuel_cost), "warning", "⛽")}
+      ${kpiCard("Maintenance Cost", fmtRs(a.total_maintenance), "danger", "🔧")}
+      ${kpiCard("Fleet ROI", a.fleet_roi + "%", "accent", "📈")}
+      ${kpiCard("Utilization", a.utilization_rate + "%", "success", "🚛")}
+    </div>
+
+    <div class="analytics-grid">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🔥 Top Cost Vehicles</span></div>
+        ${
+          a.vehicle_efficiency
+            .slice(0, 6)
+            .map(
+              (v) => `
+          <div class="bar-item">
+            <div class="bar-label">${v.license_plate}</div>
+            <div class="bar-track"><div class="bar-fill warning"
+              style="width:${(
+                (parseFloat(v.total_cost) / maxCost) *
+                100
+              ).toFixed(1)}%"></div></div>
+            <div class="bar-value">${fmtRs(v.total_cost)}</div>
+          </div>`
+            )
+            .join("") || '<div class="text-muted fs-13 p-2">No data yet</div>'
+        }
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">⛽ Fuel Efficiency (km/L)</span></div>
+        ${
+          a.vehicle_efficiency
+            .filter((v) => v.efficiency_km_per_liter > 0)
+            .slice(0, 6)
+            .map(
+              (v) => `
+          <div class="bar-item">
+            <div class="bar-label">${v.vehicle_name}</div>
+            <div class="bar-track"><div class="bar-fill teal"
+              style="width:${Math.min(
+                parseFloat(v.efficiency_km_per_liter) * 5,
+                100
+              ).toFixed(1)}%"></div></div>
+            <div class="bar-value">${parseFloat(
+              v.efficiency_km_per_liter
+            ).toFixed(1)} km/L</div>
+          </div>`
+            )
+            .join("") ||
+          '<div class="text-muted fs-13 p-2">Log expenses to see data</div>'
+        }
+      </div>
+
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-header">
+          <span class="card-title">📅 Monthly Financial Summary</span>
+          <button class="btn btn-sm btn-secondary" onclick="exportCSV()">⬇️ Export CSV</button>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Month</th><th>Revenue</th><th>Fuel</th><th>Maintenance</th><th>Net Profit</th></tr></thead>
+            <tbody>
+              ${
+                a.monthly_summary.length
+                  ? a.monthly_summary
+                      .map(
+                        (m) => `
+                <tr>
+                  <td class="mono">${m.month}</td>
+                  <td class="text-success mono">${fmtRs(m.revenue)}</td>
+                  <td class="text-warning mono">${fmtRs(m.fuel_cost)}</td>
+                  <td class="text-danger mono">${fmtRs(m.maintenance_cost)}</td>
+                  <td class="${
+                    parseFloat(m.net_profit) >= 0
+                      ? "text-success"
+                      : "text-danger"
+                  } mono fw-600">${fmtRs(m.net_profit)}</td>
+                </tr>`
+                      )
+                      .join("")
+                  : '<tr><td colspan="5" class="table-empty">Complete trips to see data</td></tr>'
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  📦 DISPATCHER PAGES
+// ═══════════════════════════════════════════════════════════
+async function renderDispatcherDashboard() {
+  const [dashRes, tripsRes] = await Promise.all([
+    api.dashboard.get(),
+    api.trips.list(),
+  ]);
+  const d = dashRes.data?.data || {};
+  const trips = tripsRes.data?.data || [];
+  const ongoingTrips = trips.filter(
+    (t) => t.status === "On Trip" || t.status === "Dispatched"
+  );
+  const pendingTrips = trips.filter((t) => t.status === "Draft");
+
+  setContent(`
+    <div class="role-header dispatcher-header">
+      <div>
+        <h2>📦 Dispatcher Dashboard</h2>
+        <p>Assign vehicles, verify drivers, dispatch cargo</p>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      ${kpiCard("Available Vehicles", "...", "teal", "🚛", "Ready to dispatch")}
+      ${kpiCard("Available Drivers", "...", "accent", "👤", "On duty")}
+      ${kpiCard(
+        "Ongoing Trips",
+        ongoingTrips.length,
+        "warning",
+        "🗺️",
+        "In progress"
+      )}
+      ${kpiCard(
+        "Pending Cargo",
+        pendingTrips.length,
+        "danger",
+        "📦",
+        "Needs assignment"
+      )}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">⚡ Quick Actions</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn btn-primary" onclick="navigate('dsp-trips')" style="justify-content:flex-start;font-size:15px">
+            🗺️ &nbsp; Create New Trip
+          </button>
+          <button class="btn btn-secondary" onclick="navigate('dsp-vehicles')" style="justify-content:flex-start">
+            🚛 &nbsp; View Available Vehicles
+          </button>
+          <button class="btn btn-secondary" onclick="navigate('dsp-drivers')" style="justify-content:flex-start">
+            👤 &nbsp; View Available Drivers
           </button>
         </div>
-        <div class="table-card">
+
+        <div style="margin-top:20px;padding:14px;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+          <div class="fs-12 text-muted fw-600" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Smart Rules</div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+            <div>❌ Cargo > Capacity → <span class="text-danger">Blocked</span></div>
+            <div>❌ License Expired → <span class="text-danger">Blocked</span></div>
+            <div>❌ Vehicle In Shop → <span class="text-danger">Hidden</span></div>
+            <div>✅ All checks pass → <span class="text-success">Dispatched!</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🗺️ Active Trips</span>
+          <button class="btn btn-sm btn-secondary" onclick="navigate('dsp-trips')">View All</button>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Vehicle</th><th>Route</th><th>Driver</th><th>Status</th></tr></thead>
+            <tbody>
+              ${
+                ongoingTrips
+                  .slice(0, 6)
+                  .map(
+                    (t) => `
+                <tr>
+                  <td class="mono">${t.license_plate}</td>
+                  <td class="fs-12">${t.origin}→${t.destination}</td>
+                  <td>${t.driver_name}</td>
+                  <td>${statusPill(t.status)}</td>
+                </tr>`
+                  )
+                  .join("") ||
+                '<tr><td colspan="4" class="table-empty">No active trips</td></tr>'
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `);
+
+  // Load available counts dynamically
+  const [vRes, dRes] = await Promise.all([
+    api.vehicles.list("?status=Available"),
+    api.drivers.list("?status=On+Duty"),
+  ]);
+  const kpis = document.querySelectorAll(".kpi-value");
+  if (kpis[0]) kpis[0].textContent = vRes.data?.data?.length || 0;
+  if (kpis[1]) kpis[1].textContent = dRes.data?.data?.length || 0;
+}
+
+async function renderDispatcherTrips(filter = "") {
+  const [tripsRes, vRes, dRes] = await Promise.all([
+    api.trips.list(filter),
+    api.vehicles.list("?status=Available"),
+    api.drivers.list("?status=On+Duty"),
+  ]);
+  const trips = tripsRes.data?.data || [];
+  state.vehicles = vRes.data?.data || [];
+  state.drivers = dRes.data?.data || [];
+
+  setContent(`
+    ${pageHeader(
+      "🗺️ Trip Dispatcher",
+      `${trips.length} total trips — only available vehicles & on-duty drivers shown`,
+      `<button class="btn btn-primary" onclick="showCreateTripModal()">🚀 New Trip</button>`
+    )}
+
+    <div class="toolbar">
+      <select class="filter-select" onchange="renderDispatcherTrips(this.value?'?status='+this.value:'')">
+        <option value="">All Status</option>
+        <option value="Draft">Draft</option>
+        <option value="Dispatched">Dispatched</option>
+        <option value="On Trip">On Trip</option>
+        <option value="Completed">Completed</option>
+        <option value="Cancelled">Cancelled</option>
+      </select>
+    </div>
+
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr>
+            <th>#</th><th>Vehicle</th><th>Driver</th><th>Route</th>
+            <th>Cargo</th><th>Revenue</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody>
+            ${
+              trips
+                .map(
+                  (t) => `
+              <tr>
+                <td class="mono">#${t.id}</td>
+                <td><div class="fw-600">${t.license_plate}</div>
+                    <div class="fs-12 text-muted">${t.fleet_type}</div></td>
+                <td>${t.driver_name}</td>
+                <td class="fs-12"><span class="text-muted">${
+                  t.origin
+                }</span><br><strong>${t.destination}</strong></td>
+                <td class="mono">${Number(
+                  t.cargo_weight_kg
+                ).toLocaleString()}/${Number(
+                    t.max_capacity_kg
+                  ).toLocaleString()} kg</td>
+                <td class="mono">${fmtRs(t.revenue)}</td>
+                <td>${statusPill(t.status)}</td>
+                <td>
+                  <div class="flex gap-2">
+                    ${
+                      t.status === "Dispatched" || t.status === "On Trip"
+                        ? `
+                      <button class="btn btn-sm btn-success" onclick="showCompleteTrip(${t.id})">✅</button>
+                      <button class="btn btn-sm btn-danger"  onclick="cancelTrip(${t.id})">✕</button>
+                    `
+                        : ""
+                    }
+                  </div>
+                </td>
+              </tr>`
+                )
+                .join("") ||
+              '<tr><td colspan="8"><div class="table-empty">No trips found</div></td></tr>'
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `);
+}
+
+async function renderDispatcherVehicles() {
+  const { data } = await api.vehicles.list("?status=Available");
+  const vehicles = data?.data || [];
+  setContent(`
+    ${pageHeader(
+      "🚛 Available Vehicles",
+      `${vehicles.length} vehicles ready for dispatch`
+    )}
+    <div class="alert alert-info">Vehicles marked <strong>In Shop</strong> or <strong>On Trip</strong> are not shown here.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+      ${
+        vehicles
+          .map(
+            (v) => `
+        <div class="card" style="border-top:3px solid var(--teal)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+            <div>
+              <div class="fw-600 fs-13" style="font-size:18px">${v.name}</div>
+              <div class="text-muted fs-12">${v.model}</div>
+            </div>
+            <div style="font-size:28px">${
+              v.type === "Truck" ? "🚛" : v.type === "Van" ? "🚐" : "🏍️"
+            }</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+            <div><span class="text-muted">Plate:</span><br><strong class="mono">${
+              v.license_plate
+            }</strong></div>
+            <div><span class="text-muted">Type:</span><br><strong>${
+              v.type
+            }</strong></div>
+            <div><span class="text-muted">Max Load:</span><br><strong class="mono">${Number(
+              v.max_capacity_kg
+            ).toLocaleString()} kg</strong></div>
+            <div><span class="text-muted">Odometer:</span><br><strong class="mono">${Number(
+              v.odometer_km
+            ).toLocaleString()} km</strong></div>
+          </div>
+          <div style="margin-top:12px">${statusPill(v.status)}</div>
+        </div>`
+          )
+          .join("") || '<div class="table-empty">No available vehicles</div>'
+      }
+    </div>
+  `);
+}
+
+async function renderDispatcherDrivers() {
+  const { data } = await api.drivers.list("?status=On+Duty");
+  const drivers = data?.data || [];
+  const today = new Date().toISOString().split("T")[0];
+  setContent(`
+    ${pageHeader("👤 Available Drivers", `${drivers.length} drivers on duty`)}
+    <div class="alert alert-info">Only <strong>On Duty</strong> drivers with <strong>valid licenses</strong> are shown and assignable.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+      ${
+        drivers
+          .map((d) => {
+            const expired = d.license_expiry < today;
+            return `
+        <div class="card" style="border-top:3px solid ${
+          expired ? "var(--danger)" : "var(--accent)"
+        }">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+            <div style="width:48px;height:48px;border-radius:50%;background:var(--accent-glow);
+              display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:var(--accent)">
+              ${d.name[0]}
+            </div>
+            <div>
+              <div class="fw-600">${d.name}</div>
+              <div class="fs-12 text-muted">${d.license_category} License</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
+            <div><span class="text-muted">License #:</span><br><strong class="mono fs-12">${
+              d.license_number
+            }</strong></div>
+            <div><span class="text-muted">Expiry:</span><br>
+              <strong class="${expired ? "text-danger" : ""}">${fmtDate(
+              d.license_expiry
+            )} ${expired ? "⚠️" : ""}</strong>
+            </div>
+            <div><span class="text-muted">Safety Score:</span><br>
+              <strong class="${
+                d.safety_score > 80
+                  ? "text-success"
+                  : d.safety_score > 60
+                  ? "text-warning"
+                  : "text-danger"
+              }">${d.safety_score}</strong>
+            </div>
+            <div><span class="text-muted">Completion:</span><br><strong>${
+              d.completion_rate
+            }%</strong></div>
+          </div>
+          ${
+            expired
+              ? '<div class="alert alert-danger" style="margin:0;padding:8px;font-size:12px">❌ Cannot assign — license expired</div>'
+              : statusPill(d.duty_status)
+          }
+        </div>`;
+          })
+          .join("") || '<div class="table-empty">No on-duty drivers</div>'
+      }
+    </div>
+  `);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  🛡️ SAFETY OFFICER PAGES
+// ═══════════════════════════════════════════════════════════
+async function renderSafetyDashboard() {
+  const { data } = await api.drivers.list();
+  const drivers = data?.data || [];
+  const today = new Date().toISOString().split("T")[0];
+
+  const expired = drivers.filter((d) => d.license_expiry < today);
+  const expiringSoon = drivers.filter((d) => {
+    const days = Math.ceil(
+      (new Date(d.license_expiry) - new Date()) / (1000 * 60 * 60 * 24)
+    );
+    return days > 0 && days <= 30;
+  });
+  const lowSafety = drivers.filter((d) => d.safety_score < 70);
+  const suspended = drivers.filter((d) => d.duty_status === "Suspended");
+
+  setContent(`
+    <div class="role-header safety-header">
+      <div>
+        <h2>🛡️ Safety Officer Dashboard</h2>
+        <p>Driver compliance, license monitoring, and safety enforcement</p>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      ${kpiCard("Total Drivers", drivers.length, "accent", "👥", "Registered")}
+      ${kpiCard(
+        "Expired Licenses",
+        expired.length,
+        expired.length > 0 ? "danger" : "success",
+        "⚠️",
+        expired.length > 0 ? "Action needed" : "All clear"
+      )}
+      ${kpiCard(
+        "Expiring Soon",
+        expiringSoon.length,
+        expiringSoon.length > 0 ? "warning" : "success",
+        "📅",
+        "Within 30 days"
+      )}
+      ${kpiCard(
+        "Low Safety Score",
+        lowSafety.length,
+        lowSafety.length > 0 ? "danger" : "success",
+        "📉",
+        "Score < 70"
+      )}
+      ${kpiCard(
+        "Suspended",
+        suspended.length,
+        suspended.length > 0 ? "warning" : "success",
+        "🚫",
+        "Cannot be assigned"
+      )}
+    </div>
+
+    ${
+      expired.length > 0
+        ? `
+    <div class="alert alert-danger">
+      🚨 <strong>URGENT:</strong> ${expired.length} driver(s) have expired licenses and are blocked from all trips.
+    </div>`
+        : ""
+    }
+
+    ${
+      expiringSoon.length > 0
+        ? `
+    <div class="alert alert-warning">
+      ⚠️ <strong>Action Needed:</strong> ${expiringSoon.length} driver(s) licenses expire within 30 days.
+    </div>`
+        : ""
+    }
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🚨 Expired Licenses</span></div>
+        ${
+          expired.length
+            ? `
           <div class="table-wrapper">
             <table class="data-table">
-              <thead><tr>
-                <th>Log #</th><th>Vehicle</th><th>Issue / Service</th>
-                <th>Cost (₹)</th><th>Date</th><th>Status</th><th>Actions</th>
-              </tr></thead>
+              <thead><tr><th>Driver</th><th>Expired On</th><th>Action</th></tr></thead>
               <tbody>
-                ${
-                  logs.length
-                    ? logs
-                        .map(
-                          (l) => `
+                ${expired
+                  .map(
+                    (d) => `
                   <tr>
-                    <td class="mono">#${l.id}</td>
-                    <td><div class="fw-600">${
-                      l.vehicle_name
-                    }</div><div class="fs-12 text-muted">${
-                            l.license_plate
-                          }</div></td>
-                    <td>${l.issue_service}<br><span class="fs-12 text-muted">${
-                            l.description || ""
-                          }</span></td>
-                    <td class="mono">${fmtRs(l.cost)}</td>
-                    <td class="fs-12">${fmtDate(l.date)}</td>
-                    <td>${statusPill(l.status)}</td>
-                    <td>
-                      ${
-                        l.status !== "Completed"
-                          ? `
-                        <button class="btn btn-sm btn-success" onclick="resolveMaintenance(${l.id})">✅ Mark Done</button>
-                      `
-                          : ""
-                      }
-                    </td>
-                  </tr>
-                `
-                        )
-                        .join("")
-                    : '<tr><td colspan="7"><div class="table-empty">No maintenance logs</div></td></tr>'
-                }
+                    <td class="fw-600">${d.name}</td>
+                    <td class="text-danger fs-12">${fmtDate(
+                      d.license_expiry
+                    )}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="suspendDriver(${
+                      d.id
+                    })">Suspend</button></td>
+                  </tr>`
+                  )
+                  .join("")}
               </tbody>
             </table>
-          </div>
-        </div>
+          </div>`
+            : '<div class="text-success p-2">✅ No expired licenses!</div>'
+        }
       </div>
-    `;
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">📉 Low Safety Scores</span></div>
+        ${
+          lowSafety.length
+            ? `
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>Driver</th><th>Score</th><th>Complaints</th></tr></thead>
+              <tbody>
+                ${lowSafety
+                  .map(
+                    (d) => `
+                  <tr>
+                    <td class="fw-600">${d.name}</td>
+                    <td class="text-danger fw-600">${d.safety_score}</td>
+                    <td>${d.complaints}</td>
+                  </tr>`
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </div>`
+            : '<div class="text-success p-2">✅ All drivers have good scores!</div>'
+        }
+      </div>
+    </div>
+  `);
 }
 
-function showAddMaintenanceModal(vehicles) {
-  const vOptions = vehicles
-    .map(
-      (v) => `<option value="${v.id}">[${v.license_plate}] ${v.name}</option>`
-    )
-    .join("");
-  openModal(`
-      <div class="modal-header">
-        <span class="modal-title">🔧 Log Maintenance Service</span>
-        <button class="modal-close" onclick="closeModal()">✕</button>
+async function renderSafetyDrivers() {
+  const { data } = await api.drivers.list();
+  const drivers = data?.data || [];
+  const today = new Date().toISOString().split("T")[0];
+
+  setContent(`
+    ${pageHeader(
+      "👤 Driver Profiles",
+      `${drivers.length} registered drivers`,
+      `<button class="btn btn-primary" onclick="showAddDriverModal()">+ Add Driver</button>`
+    )}
+
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr>
+            <th>Driver</th><th>License #</th><th>Category</th><th>Expiry</th>
+            <th>Safety Score</th><th>Completion</th><th>Complaints</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody>
+            ${drivers
+              .map((d) => {
+                const expired = d.license_expiry < today;
+                const scoreColor =
+                  d.safety_score > 80
+                    ? "text-success"
+                    : d.safety_score > 60
+                    ? "text-warning"
+                    : "text-danger";
+                return `<tr class="${expired ? "row-danger" : ""}">
+                <td class="fw-600">${
+                  d.name
+                }<br><span class="fs-12 text-muted">${d.phone || ""}</span></td>
+                <td class="mono fs-12">${d.license_number}</td>
+                <td>${d.license_category}</td>
+                <td class="${expired ? "text-danger fw-600" : ""}">
+                  ${fmtDate(d.license_expiry)}<br>
+                  ${
+                    expired
+                      ? '<span class="pill pill-danger" style="font-size:10px">EXPIRED</span>'
+                      : daysUntilExpiry(d.license_expiry) <= 30
+                      ? `<span class="pill pill-warning" style="font-size:10px">${daysUntilExpiry(
+                          d.license_expiry
+                        )}d left</span>`
+                      : ""
+                  }
+                </td>
+                <td>
+                  <div class="flex gap-2" style="align-items:center">
+                    <div style="width:50px;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden">
+                      <div style="width:${
+                        d.safety_score
+                      }%;height:100%;background:${
+                  d.safety_score > 80
+                    ? "var(--success)"
+                    : d.safety_score > 60
+                    ? "var(--warning)"
+                    : "var(--danger)"
+                }"></div>
+                    </div>
+                    <span class="${scoreColor} fw-600">${d.safety_score}</span>
+                  </div>
+                </td>
+                <td>${d.completion_rate}%</td>
+                <td class="${d.complaints > 5 ? "text-danger fw-600" : ""}">${
+                  d.complaints
+                }</td>
+                <td>${statusPill(d.duty_status)}</td>
+                <td>
+                  <div class="flex gap-2">
+                    <button class="btn btn-sm btn-secondary" onclick="showEditDriverModal(${JSON.stringify(
+                      d
+                    ).replace(/"/g, "&quot;")})">✏️</button>
+                    <select class="filter-select" style="font-size:11px;padding:4px 6px"
+                      onchange="changeDriverStatus(${
+                        d.id
+                      },this.value);this.value=''">
+                      <option value="">Status...</option>
+                      <option value="On Duty">On Duty</option>
+                      <option value="Off Duty">Off Duty</option>
+                      <option value="Suspended">Suspend</option>
+                    </select>
+                  </div>
+                </td>
+              </tr>`;
+              })
+              .join("")}
+          </tbody>
+        </table>
       </div>
-      <div class="alert alert-warning">Vehicle will be automatically set to <strong>In Shop</strong> status.</div>
-      <form id="add-maint-form">
-        <div class="form-group">
-          <label class="form-label">Vehicle *</label>
-          <select class="form-control" name="vehicle_id" required>
-            <option value="">Select vehicle</option>
-            ${vOptions}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Issue / Service *</label>
-          <input class="form-control" name="issue_service" placeholder="e.g. Engine Overheating" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Description</label>
-          <textarea class="form-control" name="description" rows="2" placeholder="Detailed notes..."></textarea>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Cost (₹)</label>
-            <input class="form-control" type="number" name="cost" placeholder="0">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Date *</label>
-            <input class="form-control" type="date" name="date" value="${
-              new Date().toISOString().split("T")[0]
-            }" required>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Log Service</button>
-        </div>
-      </form>
-    `);
-  document.getElementById("add-maint-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const { ok, data } = await api.maintenance.add(
-      Object.fromEntries(fd.entries())
-    );
-    if (ok) {
-      toast(data.message, "success");
-      closeModal();
-      renderMaintenance();
-    } else toast(data.message, "error");
+    </div>
+  `);
+}
+
+async function renderSafetyCompliance() {
+  const { data } = await api.drivers.list();
+  const drivers = data?.data || [];
+  const today = new Date();
+
+  const grouped = {
+    expired: drivers.filter((d) => new Date(d.license_expiry) < today),
+    soon: drivers.filter((d) => {
+      const days = daysUntilExpiry(d.license_expiry);
+      return days > 0 && days <= 30;
+    }),
+    ok: drivers.filter((d) => daysUntilExpiry(d.license_expiry) > 30),
   };
+
+  setContent(`
+    ${pageHeader(
+      "📋 License Compliance Tracker",
+      "Monitor all driver licenses and expiry dates"
+    )}
+
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);max-width:540px">
+      ${kpiCard(
+        "Expired",
+        grouped.expired.length,
+        grouped.expired.length > 0 ? "danger" : "success",
+        "🔴"
+      )}
+      ${kpiCard(
+        "Expiring Soon",
+        grouped.soon.length,
+        grouped.soon.length > 0 ? "warning" : "success",
+        "🟡"
+      )}
+      ${kpiCard("Valid", grouped.ok.length, "success", "🟢")}
+    </div>
+
+    ${["expired", "soon", "ok"]
+      .map(
+        (group) => `
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <span class="card-title">
+            ${
+              group === "expired"
+                ? "🔴 Expired Licenses"
+                : group === "soon"
+                ? "🟡 Expiring Within 30 Days"
+                : "🟢 Valid Licenses"
+            }
+          </span>
+          <span class="pill ${
+            group === "expired"
+              ? "pill-danger"
+              : group === "soon"
+              ? "pill-warning"
+              : "pill-success"
+          }">
+            ${grouped[group].length}
+          </span>
+        </div>
+        ${
+          grouped[group].length
+            ? `
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Driver</th><th>License #</th><th>Category</th><th>Expiry</th><th>Days</th><th>Action</th></tr></thead>
+            <tbody>
+              ${grouped[group]
+                .map((d) => {
+                  const days = daysUntilExpiry(d.license_expiry);
+                  return `<tr>
+                  <td class="fw-600">${d.name}</td>
+                  <td class="mono fs-12">${d.license_number}</td>
+                  <td>${d.license_category}</td>
+                  <td class="${
+                    group === "expired"
+                      ? "text-danger"
+                      : group === "soon"
+                      ? "text-warning"
+                      : ""
+                  } fw-600">${fmtDate(d.license_expiry)}</td>
+                  <td class="${
+                    group === "expired"
+                      ? "text-danger"
+                      : group === "soon"
+                      ? "text-warning"
+                      : "text-success"
+                  } mono fw-600">
+                    ${
+                      group === "expired"
+                        ? `${Math.abs(days)}d ago`
+                        : group === "soon"
+                        ? `${days}d`
+                        : "Valid"
+                    }
+                  </td>
+                  <td>
+                    ${
+                      group === "expired"
+                        ? `<button class="btn btn-sm btn-danger" onclick="suspendDriver(${d.id})">🚫 Suspend</button>`
+                        : group === "soon"
+                        ? `<button class="btn btn-sm btn-warning" onclick="alertDriver(${d.id},'${d.name}')">📧 Alert</button>`
+                        : '<span class="text-success fs-12">✅</span>'
+                    }
+                  </td>
+                </tr>`;
+                })
+                .join("")}
+            </tbody>
+          </table>
+        </div>`
+            : `<div class="text-muted p-2">None in this category</div>`
+        }
+      </div>`
+      )
+      .join("")}
+  `);
 }
 
-async function resolveMaintenance(id) {
-  const { ok, data } = await api.maintenance.update(id, {
-    status: "Completed",
-    issue_service: "",
-  });
-  if (ok) {
-    toast("Maintenance marked complete. Vehicle set to Available.", "success");
-    renderMaintenance();
-  } else toast(data.message, "error");
+// ═══════════════════════════════════════════════════════════
+//  💰 FINANCIAL ANALYST PAGES
+// ═══════════════════════════════════════════════════════════
+async function renderFinanceDashboard() {
+  const { ok, data } = await api.analytics.get();
+  if (!ok) {
+    toast(data.message, "error");
+    return;
+  }
+  const a = data.data;
+  const netProfit = a.total_revenue - a.total_fuel_cost - a.total_maintenance;
+
+  setContent(`
+    <div class="role-header finance-header">
+      <div>
+        <h2>💰 Financial Analyst Dashboard</h2>
+        <p>Costs, revenue, ROI, and fleet financial performance</p>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      ${kpiCard(
+        "Total Revenue",
+        fmtRs(a.total_revenue),
+        "success",
+        "💰",
+        "All completed trips"
+      )}
+      ${kpiCard(
+        "Total Fuel Cost",
+        fmtRs(a.total_fuel_cost),
+        "warning",
+        "⛽",
+        "Across all vehicles"
+      )}
+      ${kpiCard(
+        "Maintenance Cost",
+        fmtRs(a.total_maintenance),
+        "danger",
+        "🔧",
+        "Completed services"
+      )}
+      ${kpiCard(
+        "Net Profit",
+        fmtRs(netProfit),
+        netProfit >= 0 ? "teal" : "danger",
+        "📈",
+        "Revenue - All costs"
+      )}
+      ${kpiCard(
+        "Fleet ROI",
+        a.fleet_roi + "%",
+        "accent",
+        "🏦",
+        "Return on investment"
+      )}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header"><span class="card-title">⚡ Quick Actions</span></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn btn-primary" onclick="navigate('fin-expenses')" style="justify-content:flex-start">
+            💰 &nbsp; Log Fuel & Expense
+          </button>
+          <button class="btn btn-secondary" onclick="navigate('fin-reports')" style="justify-content:flex-start">
+            📊 &nbsp; Monthly Reports
+          </button>
+          <button class="btn btn-secondary" onclick="exportCSV()" style="justify-content:flex-start">
+            ⬇️ &nbsp; Export CSV Report
+          </button>
+        </div>
+
+        <div style="margin-top:20px">
+          <div class="fs-12 text-muted fw-600 mb-2" style="text-transform:uppercase;letter-spacing:1px">ROI Formula</div>
+          <div style="background:var(--bg-elevated);padding:12px;border-radius:var(--radius-sm);font-size:13px;font-family:'Space Mono',monospace">
+            (Revenue - Fuel - Maintenance)<br>÷ Acquisition Cost × 100<br>
+            <span style="color:var(--accent);font-size:16px;margin-top:8px;display:block">= ${
+              a.fleet_roi
+            }%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">🚛 Cost Per Vehicle</span></div>
+        ${
+          a.vehicle_efficiency
+            .slice(0, 6)
+            .map(
+              (v) => `
+          <div class="bar-item">
+            <div class="bar-label">${v.license_plate}</div>
+            <div class="bar-track">
+              <div class="bar-fill warning" style="width:${Math.min(
+                (parseFloat(v.total_cost) /
+                  Math.max(
+                    ...a.vehicle_efficiency.map((x) => x.total_cost),
+                    1
+                  )) *
+                  100,
+                100
+              ).toFixed(1)}%"></div>
+            </div>
+            <div class="bar-value">${fmtRs(v.total_cost)}</div>
+          </div>`
+            )
+            .join("") ||
+          '<div class="text-muted fs-13">Log expenses to see data</div>'
+        }
+      </div>
+    </div>
+  `);
 }
 
-// ── EXPENSES ──────────────────────────────────────────────
-async function renderExpenses() {
+async function renderFinanceExpenses() {
   const [eRes, tRes, dRes] = await Promise.all([
     api.expenses.list(),
     api.trips.list("?status=On+Trip"),
@@ -761,7 +1371,6 @@ async function renderExpenses() {
   const expenses = eRes.data?.data || [];
   const trips = tRes.data?.data || [];
   const drivers = dRes.data?.data || [];
-
   const totalFuel = expenses.reduce(
     (s, e) => s + parseFloat(e.fuel_cost || 0),
     0
@@ -771,63 +1380,646 @@ async function renderExpenses() {
     0
   );
 
-  document.querySelector(".page-content").innerHTML = `
-      <div class="page-enter">
-        <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);max-width:640px">
-          <div class="kpi-card teal"><div class="kpi-value">${fmtRs(
-            totalFuel
-          )}</div><div class="kpi-label">Total Fuel Cost</div></div>
-          <div class="kpi-card warning"><div class="kpi-value">${fmtRs(
-            totalMisc
-          )}</div><div class="kpi-label">Misc Expenses</div></div>
-          <div class="kpi-card accent"><div class="kpi-value">${fmtRs(
-            totalFuel + totalMisc
-          )}</div><div class="kpi-label">Total Operational</div></div>
-        </div>
-        <div class="page-header">
-          <div class="page-title-group"><h1>Expense & Fuel Log</h1></div>
-          <button class="btn btn-primary" onclick="showAddExpenseModal(
-            ${JSON.stringify(trips).replace(/"/g, "&quot;")},
-            ${JSON.stringify(drivers).replace(/"/g, "&quot;")}
-          )">+ Add Expense</button>
-        </div>
-        <div class="table-card">
+  setContent(`
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);max-width:600px">
+      <div class="kpi-card teal"><div class="kpi-value">${fmtRs(
+        totalFuel
+      )}</div><div class="kpi-label">Total Fuel</div></div>
+      <div class="kpi-card warning"><div class="kpi-value">${fmtRs(
+        totalMisc
+      )}</div><div class="kpi-label">Misc Expenses</div></div>
+      <div class="kpi-card accent"><div class="kpi-value">${fmtRs(
+        totalFuel + totalMisc
+      )}</div><div class="kpi-label">Total Operational</div></div>
+    </div>
+
+    ${pageHeader(
+      "💰 Expense & Fuel Logger",
+      `${expenses.length} entries logged`,
+      `<button class="btn btn-primary" onclick="showAddExpenseModal(
+        ${JSON.stringify(trips).replace(/"/g, "&quot;")},
+        ${JSON.stringify(drivers).replace(/"/g, "&quot;")}
+      )">+ Log Expense</button>`
+    )}
+
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr>
+            <th>Trip #</th><th>Driver</th><th>Route</th><th>Distance</th>
+            <th>Fuel Cost</th><th>Misc</th><th>Total</th><th>Date</th>
+          </tr></thead>
+          <tbody>
+            ${
+              expenses
+                .map(
+                  (e) => `
+              <tr>
+                <td class="mono">#${e.trip_id}</td>
+                <td>${e.driver_name}</td>
+                <td class="fs-12">${e.origin}→${e.destination}</td>
+                <td class="mono">${e.distance_km} km</td>
+                <td class="mono text-warning">${fmtRs(e.fuel_cost)}</td>
+                <td class="mono">${fmtRs(e.misc_expense)}</td>
+                <td class="mono fw-600">${fmtRs(e.total_cost)}</td>
+                <td class="fs-12 text-muted">${fmtDate(e.date)}</td>
+              </tr>`
+                )
+                .join("") ||
+              '<tr><td colspan="8"><div class="table-empty">No expenses logged yet</div></td></tr>'
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `);
+}
+
+async function renderFinanceReports() {
+  const { ok, data } = await api.analytics.get();
+  if (!ok) {
+    toast(data.message, "error");
+    return;
+  }
+  const a = data.data;
+
+  setContent(`
+    ${pageHeader(
+      "📈 Monthly Reports & Analytics",
+      "Vehicle ROI, monthly P&L, fuel efficiency",
+      `<button class="btn btn-primary" onclick="exportCSV()">⬇️ Export CSV</button>`
+    )}
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><span class="card-title">📅 Monthly P&L Statement</span></div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>Month</th><th>Revenue</th><th>Fuel Cost</th><th>Maintenance</th><th>Net Profit</th><th>Margin</th></tr></thead>
+          <tbody>
+            ${
+              a.monthly_summary.length
+                ? a.monthly_summary
+                    .map((m) => {
+                      const profit = parseFloat(m.net_profit);
+                      const revenue = parseFloat(m.revenue);
+                      const margin =
+                        revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : 0;
+                      return `<tr>
+                <td class="mono fw-600">${m.month}</td>
+                <td class="text-success mono">${fmtRs(m.revenue)}</td>
+                <td class="text-warning mono">${fmtRs(m.fuel_cost)}</td>
+                <td class="text-danger mono">${fmtRs(m.maintenance_cost)}</td>
+                <td class="${
+                  profit >= 0 ? "text-success" : "text-danger"
+                } mono fw-600">${fmtRs(m.net_profit)}</td>
+                <td class="${
+                  profit >= 0 ? "text-success" : "text-danger"
+                } mono">${margin}%</td>
+              </tr>`;
+                    })
+                    .join("")
+                : '<tr><td colspan="6" class="table-empty">Complete trips to generate reports</td></tr>'
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="analytics-grid">
+      <div class="card">
+        <div class="card-header"><span class="card-title">⛽ Fuel Efficiency</span></div>
+        ${
+          a.vehicle_efficiency
+            .filter((v) => v.efficiency_km_per_liter > 0)
+            .map(
+              (v) => `
+          <div class="bar-item">
+            <div class="bar-label">${v.vehicle_name}</div>
+            <div class="bar-track"><div class="bar-fill teal"
+              style="width:${Math.min(
+                parseFloat(v.efficiency_km_per_liter) * 5,
+                100
+              ).toFixed(1)}%"></div></div>
+            <div class="bar-value">${parseFloat(
+              v.efficiency_km_per_liter
+            ).toFixed(1)} km/L</div>
+          </div>`
+            )
+            .join("") ||
+          '<div class="text-muted fs-13">Log fuel data to see efficiency</div>'
+        }
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">💤 Idle Vehicles (Dead Stock)</span></div>
+        ${
+          a.idle_vehicles.length
+            ? `
           <div class="table-wrapper">
             <table class="data-table">
-              <thead><tr>
-                <th>Trip #</th><th>Driver</th><th>Route</th><th>Distance</th>
-                <th>Fuel Cost</th><th>Misc</th><th>Total</th><th>Date</th>
-              </tr></thead>
+              <thead><tr><th>Plate</th><th>Name</th><th>Last Trip</th></tr></thead>
               <tbody>
-                ${
-                  expenses.length
-                    ? expenses
-                        .map(
-                          (e) => `
+                ${a.idle_vehicles
+                  .map(
+                    (v) => `
                   <tr>
-                    <td class="mono">#${e.trip_id}</td>
-                    <td>${e.driver_name}</td>
-                    <td class="fs-12">${e.origin} → ${e.destination}</td>
-                    <td class="mono">${e.distance_km} km</td>
-                    <td class="mono text-warning">${fmtRs(e.fuel_cost)}</td>
-                    <td class="mono">${fmtRs(e.misc_expense)}</td>
-                    <td class="mono fw-600">${fmtRs(e.total_cost)}</td>
-                    <td class="fs-12 text-muted">${fmtDate(e.date)}</td>
-                  </tr>
-                `
-                        )
-                        .join("")
-                    : '<tr><td colspan="8"><div class="table-empty">No expenses logged</div></td></tr>'
-                }
+                    <td class="mono">${v.license_plate}</td>
+                    <td>${v.name}</td>
+                    <td class="text-muted fs-12">${
+                      v.last_trip ? fmtDate(v.last_trip) : "Never used"
+                    }</td>
+                  </tr>`
+                  )
+                  .join("")}
               </tbody>
             </table>
-          </div>
-        </div>
+          </div>`
+            : '<div class="text-success p-2">✅ No idle vehicles!</div>'
+        }
       </div>
-    `;
+    </div>
+  `);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SHARED MODALS & ACTIONS
+// ═══════════════════════════════════════════════════════════
+function showAddVehicleModal() {
+  openModal(`
+    <div class="modal-header">
+      <span class="modal-title">🚛 Register New Vehicle</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <form id="add-vehicle-form">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Vehicle Name *</label>
+          <input class="form-control" name="name" placeholder="e.g. Tata Prima" required></div>
+        <div class="form-group"><label class="form-label">Model *</label>
+          <input class="form-control" name="model" placeholder="e.g. Prima 4028.S" required></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">License Plate *</label>
+          <input class="form-control" name="license_plate" placeholder="GJ-01-AB-1234" required></div>
+        <div class="form-group"><label class="form-label">Type *</label>
+          <select class="form-control" name="type" required>
+            <option value="">Select type</option>
+            <option>Truck</option><option>Van</option><option>Bike</option>
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Max Capacity (kg) *</label>
+          <input class="form-control" type="number" name="max_capacity_kg" placeholder="5000" required></div>
+        <div class="form-group"><label class="form-label">Odometer (km)</label>
+          <input class="form-control" type="number" name="odometer_km" placeholder="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Acquisition Cost (₹)</label>
+          <input class="form-control" type="number" name="acquisition_cost" placeholder="1500000"></div>
+        <div class="form-group"><label class="form-label">Region</label>
+          <input class="form-control" name="region" placeholder="Ahmedabad"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Register Vehicle</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("add-vehicle-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(e.target).entries());
+    const { ok, data } = await api.vehicles.add(body);
+    if (ok) {
+      toast("Vehicle registered!", "success");
+      closeModal();
+      navigate(currentPage);
+    } else toast(data.message, "error");
+  };
+}
+
+function showEditVehicleModal(v) {
+  if (typeof v === "string") v = JSON.parse(v);
+  openModal(`
+    <div class="modal-header">
+      <span class="modal-title">✏️ Edit Vehicle — ${v.license_plate}</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <form id="edit-vehicle-form">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Name</label>
+          <input class="form-control" name="name" value="${
+            v.name
+          }" required></div>
+        <div class="form-group"><label class="form-label">Model</label>
+          <input class="form-control" name="model" value="${
+            v.model
+          }" required></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Type</label>
+          <select class="form-control" name="type">
+            <option ${v.type === "Truck" ? "selected" : ""}>Truck</option>
+            <option ${v.type === "Van" ? "selected" : ""}>Van</option>
+            <option ${v.type === "Bike" ? "selected" : ""}>Bike</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Max Capacity (kg)</label>
+          <input class="form-control" type="number" name="max_capacity_kg" value="${
+            v.max_capacity_kg
+          }" required></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Odometer (km)</label>
+          <input class="form-control" type="number" name="odometer_km" value="${
+            v.odometer_km
+          }"></div>
+        <div class="form-group"><label class="form-label">Region</label>
+          <input class="form-control" name="region" value="${
+            v.region || ""
+          }"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select class="form-control" name="status">
+          <option ${
+            v.status === "Available" ? "selected" : ""
+          }>Available</option>
+          <option ${v.status === "In Shop" ? "selected" : ""}>In Shop</option>
+          <option ${v.status === "Retired" ? "selected" : ""}>Retired</option>
+        </select></div>
+      <input type="hidden" name="acquisition_cost" value="${
+        v.acquisition_cost || 0
+      }">
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("edit-vehicle-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(e.target).entries());
+    const { ok, data } = await api.vehicles.update(v.id, body);
+    if (ok) {
+      toast("Vehicle updated!", "success");
+      closeModal();
+      navigate(currentPage);
+    } else toast(data.message, "error");
+  };
+}
+
+async function toggleVehicleService(id, status) {
+  const { ok, data } = await api.vehicles.toggleService(id);
+  if (ok) {
+    toast(`Vehicle → ${data.data.new_status}`, "success");
+    navigate(currentPage);
+  } else toast(data.message, "error");
+}
+
+async function retireVehicle(id) {
+  if (!confirm("Retire this vehicle? It will be marked Out of Service."))
+    return;
+  const { ok, data } = await api.vehicles.retire(id);
+  if (ok) {
+    toast("Vehicle retired", "success");
+    navigate(currentPage);
+  } else toast(data.message, "error");
+}
+
+function showAddMaintenanceModal(vehicles) {
+  if (typeof vehicles === "string") vehicles = JSON.parse(vehicles);
+  const vOpts = vehicles
+    .map(
+      (v) => `<option value="${v.id}">[${v.license_plate}] ${v.name}</option>`
+    )
+    .join("");
+  openModal(`
+    <div class="modal-header">
+      <span class="modal-title">🔧 Log Maintenance Service</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="alert alert-warning">Vehicle will be automatically set to <strong>In Shop</strong>.</div>
+    <form id="add-maint-form">
+      <div class="form-group"><label class="form-label">Vehicle *</label>
+        <select class="form-control" name="vehicle_id" required>
+          <option value="">Select vehicle</option>${vOpts}
+        </select></div>
+      <div class="form-group"><label class="form-label">Issue / Service *</label>
+        <input class="form-control" name="issue_service" placeholder="e.g. Engine Overheating" required></div>
+      <div class="form-group"><label class="form-label">Description</label>
+        <textarea class="form-control" name="description" rows="2" placeholder="Details..."></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Cost (₹)</label>
+          <input class="form-control" type="number" name="cost" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Date *</label>
+          <input class="form-control" type="date" name="date" value="${
+            new Date().toISOString().split("T")[0]
+          }" required></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Log Service</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("add-maint-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const { ok, data } = await api.maintenance.add(
+      Object.fromEntries(new FormData(e.target).entries())
+    );
+    if (ok) {
+      toast(data.message, "success");
+      closeModal();
+      navigate(currentPage);
+    } else toast(data.message, "error");
+  };
+}
+
+async function resolveMaintenance(id) {
+  const { ok, data } = await api.maintenance.update(id, {
+    status: "Completed",
+    issue_service: "Resolved",
+  });
+  if (ok) {
+    toast("Resolved! Vehicle set to Available.", "success");
+    navigate(currentPage);
+  } else toast(data.message, "error");
+}
+
+function showCreateTripModal() {
+  const vOpts = state.vehicles
+    .map(
+      (v) =>
+        `<option value="${v.id}" data-cap="${v.max_capacity_kg}">[${
+          v.license_plate
+        }] ${v.name} — ${Number(v.max_capacity_kg).toLocaleString()}kg</option>`
+    )
+    .join("");
+  const dOpts = state.drivers
+    .map(
+      (d) =>
+        `<option value="${d.id}">${d.name} (${d.license_category}) — Score: ${d.safety_score}</option>`
+    )
+    .join("");
+
+  openModal(`
+    <div class="modal-header">
+      <span class="modal-title">🚀 Create New Trip</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="capacity-alert"></div>
+    <form id="create-trip-form">
+      <div class="form-group"><label class="form-label">Select Vehicle *</label>
+        <select class="form-control" name="vehicle_id" id="trip-vehicle" required onchange="updateCapacity()">
+          <option value="">— Available vehicles only —</option>${
+            vOpts || "<option disabled>No available vehicles</option>"
+          }
+        </select>
+        <div class="form-hint" id="cap-hint">Select vehicle to see max capacity</div></div>
+
+      <div class="form-group"><label class="form-label">Cargo Weight (kg) *</label>
+        <input class="form-control" type="number" name="cargo_weight_kg" id="trip-cargo" placeholder="e.g. 2500" required oninput="validateCargo()">
+        <div class="form-error hidden" id="cargo-err">⚠️ Exceeds vehicle max capacity!</div></div>
+
+      <div class="form-group"><label class="form-label">Select Driver *</label>
+        <select class="form-control" name="driver_id" required>
+          <option value="">— On-duty drivers only —</option>${
+            dOpts || "<option disabled>No on-duty drivers</option>"
+          }
+        </select></div>
+
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Origin *</label>
+          <input class="form-control" name="origin" placeholder="e.g. Ahmedabad" required></div>
+        <div class="form-group"><label class="form-label">Destination *</label>
+          <input class="form-control" name="destination" placeholder="e.g. Mumbai" required></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Est. Fuel Cost (₹)</label>
+          <input class="form-control" type="number" name="estimated_fuel_cost" placeholder="5000"></div>
+        <div class="form-group"><label class="form-label">Revenue (₹)</label>
+          <input class="form-control" type="number" name="revenue" placeholder="25000"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="dispatch-btn">🚀 Dispatch Trip</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("create-trip-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(e.target).entries());
+    const { ok, data } = await api.trips.create(body);
+    if (ok) {
+      toast(data.message, "success");
+      closeModal();
+      navigate(currentPage);
+    } else toast(data.message, "error");
+  };
+}
+
+function updateCapacity() {
+  const sel = document.getElementById("trip-vehicle");
+  const cap = sel.options[sel.selectedIndex]?.dataset.cap;
+  document.getElementById("cap-hint").textContent = cap
+    ? `Max capacity: ${Number(cap).toLocaleString()} kg`
+    : "Select vehicle to see max capacity";
+  validateCargo();
+}
+
+function validateCargo() {
+  const sel = document.getElementById("trip-vehicle");
+  const cap = parseFloat(sel?.options[sel?.selectedIndex]?.dataset.cap || 0);
+  const cargo = parseFloat(document.getElementById("trip-cargo")?.value || 0);
+  const err = document.getElementById("cargo-err");
+  const btn = document.getElementById("dispatch-btn");
+  const over = cap > 0 && cargo > cap;
+  err?.classList.toggle("hidden", !over);
+  if (btn) btn.disabled = over;
+}
+
+function showCompleteTrip(id) {
+  openModal(`
+    <div class="modal-header">
+      <span class="modal-title">✅ Complete Trip #${id}</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <form id="complete-trip-form">
+      <div class="form-group"><label class="form-label">Final Odometer (km) *</label>
+        <input class="form-control" type="number" name="end_odometer" placeholder="e.g. 47500" required></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Actual Fuel Cost (₹)</label>
+          <input class="form-control" type="number" name="actual_fuel_cost" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Final Revenue (₹)</label>
+          <input class="form-control" type="number" name="revenue" placeholder="0"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-success">Mark Completed</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("complete-trip-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(e.target).entries());
+    const { ok, data } = await api.trips.complete(id, body);
+    if (ok) {
+      toast(data.message, "success");
+      closeModal();
+      navigate(currentPage);
+    } else toast(data.message, "error");
+  };
+}
+
+async function cancelTrip(id) {
+  if (!confirm("Cancel this trip? Vehicle and driver will be released."))
+    return;
+  const { ok, data } = await api.trips.cancel(id);
+  if (ok) {
+    toast(data.message, "warning");
+    navigate(currentPage);
+  } else toast(data.message, "error");
+}
+
+function showAddDriverModal() {
+  openModal(`
+    <div class="modal-header">
+      <span class="modal-title">👤 Add New Driver</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <form id="add-driver-form">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Full Name *</label>
+          <input class="form-control" name="name" placeholder="Ramesh Patel" required></div>
+        <div class="form-group"><label class="form-label">Phone</label>
+          <input class="form-control" name="phone" placeholder="9876543210"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">License Number *</label>
+          <input class="form-control" name="license_number" placeholder="GJ0120240001" required></div>
+        <div class="form-group"><label class="form-label">License Category *</label>
+          <select class="form-control" name="license_category" required>
+            <option value="">Select</option>
+            <option>Truck</option><option>Van</option><option>Bike</option><option>All</option>
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">License Expiry Date *</label>
+        <input class="form-control" type="date" name="license_expiry" required></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Driver</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("add-driver-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const { ok, data } = await api.drivers.add(
+      Object.fromEntries(new FormData(e.target).entries())
+    );
+    if (ok) {
+      toast("Driver added!", "success");
+      closeModal();
+      navigate(currentPage);
+    } else toast(data.message, "error");
+  };
+}
+
+function showEditDriverModal(d) {
+  if (typeof d === "string") d = JSON.parse(d);
+  openModal(`
+    <div class="modal-header">
+      <span class="modal-title">✏️ Edit Driver — ${d.name}</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <form id="edit-driver-form">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Name</label>
+          <input class="form-control" name="name" value="${
+            d.name
+          }" required></div>
+        <div class="form-group"><label class="form-label">Phone</label>
+          <input class="form-control" name="phone" value="${
+            d.phone || ""
+          }"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">License Expiry</label>
+          <input class="form-control" type="date" name="license_expiry" value="${
+            d.license_expiry
+          }" required></div>
+        <div class="form-group"><label class="form-label">Safety Score</label>
+          <input class="form-control" type="number" name="safety_score" value="${
+            d.safety_score
+          }" min="0" max="100"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Complaints</label>
+          <input class="form-control" type="number" name="complaints" value="${
+            d.complaints
+          }"></div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-control" name="duty_status">
+            <option ${
+              d.duty_status === "On Duty" ? "selected" : ""
+            }>On Duty</option>
+            <option ${
+              d.duty_status === "Off Duty" ? "selected" : ""
+            }>Off Duty</option>
+            <option ${
+              d.duty_status === "Suspended" ? "selected" : ""
+            }>Suspended</option>
+          </select></div>
+      </div>
+      <input type="hidden" name="license_number"    value="${d.license_number}">
+      <input type="hidden" name="license_category"  value="${
+        d.license_category
+      }">
+      <input type="hidden" name="completion_rate"   value="${
+        d.completion_rate
+      }">
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("edit-driver-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const { ok, data } = await api.drivers.update(
+      d.id,
+      Object.fromEntries(new FormData(e.target).entries())
+    );
+    if (ok) {
+      toast("Driver updated!", "success");
+      closeModal();
+      navigate(currentPage);
+    } else toast(data.message, "error");
+  };
+}
+
+async function changeDriverStatus(id, status) {
+  if (!status) return;
+  const { ok, data } = await api.drivers.setStatus(id, status);
+  if (ok) {
+    toast(data.message, "success");
+    navigate(currentPage);
+  } else toast(data.message, "error");
+}
+
+async function suspendDriver(id) {
+  if (!confirm("Suspend this driver? They will be blocked from all trips."))
+    return;
+  const { ok, data } = await api.drivers.setStatus(id, "Suspended");
+  if (ok) {
+    toast("Driver suspended", "warning");
+    navigate(currentPage);
+  } else toast(data.message, "error");
+}
+
+function alertDriver(id, name) {
+  toast(`📧 Alert sent to ${name} — license expiring soon!`, "warning");
 }
 
 function showAddExpenseModal(trips, drivers) {
+  if (typeof trips === "string") trips = JSON.parse(trips);
+  if (typeof drivers === "string") drivers = JSON.parse(drivers);
   const tOpts = trips
     .map(
       (t) =>
@@ -838,455 +2030,105 @@ function showAddExpenseModal(trips, drivers) {
     .map((d) => `<option value="${d.id}">${d.name}</option>`)
     .join("");
   openModal(`
-      <div class="modal-header">
-        <span class="modal-title">💰 Log Expense</span>
-        <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-header">
+      <span class="modal-title">💰 Log Expense / Fuel</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <form id="add-expense-form">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Trip *</label>
+          <select class="form-control" name="trip_id" required>
+            <option value="">Select trip</option>${
+              tOpts || "<option disabled>No active trips</option>"
+            }
+          </select></div>
+        <div class="form-group"><label class="form-label">Driver *</label>
+          <select class="form-control" name="driver_id" required>
+            <option value="">Select driver</option>${dOpts}
+          </select></div>
       </div>
-      <form id="add-expense-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Trip *</label>
-            <select class="form-control" name="trip_id" required>
-              <option value="">Select trip</option>${tOpts}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Driver *</label>
-            <select class="form-control" name="driver_id" required>
-              <option value="">Select driver</option>${dOpts}
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Fuel Cost (₹)</label>
-            <input class="form-control" type="number" name="fuel_cost" placeholder="0">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Fuel Liters</label>
-            <input class="form-control" type="number" name="fuel_liters" placeholder="0">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Misc Expense (₹)</label>
-            <input class="form-control" type="number" name="misc_expense" placeholder="0">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Distance (km)</label>
-            <input class="form-control" type="number" name="distance_km" placeholder="0">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Date *</label>
-            <input class="form-control" type="date" name="date" value="${
-              new Date().toISOString().split("T")[0]
-            }" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Notes</label>
-            <input class="form-control" name="notes" placeholder="Optional notes">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Expense</button>
-        </div>
-      </form>
-    `);
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fuel Cost (₹)</label>
+          <input class="form-control" type="number" name="fuel_cost" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Fuel (Liters)</label>
+          <input class="form-control" type="number" name="fuel_liters" placeholder="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Misc Expense (₹)</label>
+          <input class="form-control" type="number" name="misc_expense" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Distance (km)</label>
+          <input class="form-control" type="number" name="distance_km" placeholder="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Date *</label>
+          <input class="form-control" type="date" name="date" value="${
+            new Date().toISOString().split("T")[0]
+          }" required></div>
+        <div class="form-group"><label class="form-label">Notes</label>
+          <input class="form-control" name="notes" placeholder="Optional"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Expense</button>
+      </div>
+    </form>
+  `);
   document.getElementById("add-expense-form").onsubmit = async (e) => {
     e.preventDefault();
-    const fd = new FormData(e.target);
     const { ok, data } = await api.expenses.add(
-      Object.fromEntries(fd.entries())
+      Object.fromEntries(new FormData(e.target).entries())
     );
     if (ok) {
       toast("Expense logged!", "success");
       closeModal();
-      renderExpenses();
+      navigate(currentPage);
     } else toast(data.message, "error");
   };
 }
 
-// ── DRIVERS ───────────────────────────────────────────────
-async function renderDrivers() {
-  const { ok, data } = await api.drivers.list();
-  if (!ok) {
-    toast(data.message, "error");
-    return;
-  }
-  const drivers = data.data;
-  const today = new Date().toISOString().split("T")[0];
-
-  document.querySelector(".page-content").innerHTML = `
-      <div class="page-enter">
-        <div class="page-header">
-          <div class="page-title-group"><h1>Driver Profiles</h1><p>${
-            drivers.length
-          } registered drivers</p></div>
-          <button class="btn btn-primary" onclick="showAddDriverModal()">+ Add Driver</button>
-        </div>
-        <div class="toolbar">
-          <div class="search-box">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-            <input class="search-input" placeholder="Search name or license..." id="d-search" oninput="debounceDriverSearch(this.value)">
-          </div>
-          <select class="filter-select" onchange="renderDriversFiltered(this.value)">
-            <option value="">All Status</option>
-            <option value="On Duty">On Duty</option>
-            <option value="Off Duty">Off Duty</option>
-            <option value="On Trip">On Trip</option>
-            <option value="Suspended">Suspended</option>
-          </select>
-        </div>
-        <div class="table-card">
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead><tr>
-                <th>Name</th><th>License #</th><th>Category</th><th>Expiry</th>
-                <th>Completion</th><th>Safety Score</th><th>Complaints</th><th>Status</th><th>Actions</th>
-              </tr></thead>
-              <tbody>
-                ${drivers
-                  .map((d) => {
-                    const expired = d.license_expiry < today;
-                    return `
-                    <tr>
-                      <td class="fw-600">${d.name}</td>
-                      <td class="mono">${d.license_number}</td>
-                      <td>${d.license_category}</td>
-                      <td class="${expired ? "text-danger fw-600" : ""}">
-                        ${fmtDate(d.license_expiry)} ${
-                      expired ? "⚠️ EXPIRED" : ""
-                    }
-                      </td>
-                      <td>
-                        <div style="display:flex;align-items:center;gap:8px">
-                          <div style="width:60px;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden">
-                            <div style="width:${
-                              d.completion_rate
-                            }%;height:100%;background:var(--success)"></div>
-                          </div>
-                          ${d.completion_rate}%
-                        </div>
-                      </td>
-                      <td>
-                        <div style="display:flex;align-items:center;gap:8px">
-                          <div style="width:60px;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden">
-                            <div style="width:${
-                              d.safety_score
-                            }%;height:100%;background:${
-                      d.safety_score > 80
-                        ? "var(--success)"
-                        : d.safety_score > 60
-                        ? "var(--warning)"
-                        : "var(--danger)"
-                    }"></div>
-                          </div>
-                          ${d.safety_score}
-                        </div>
-                      </td>
-                      <td class="${
-                        d.complaints > 5 ? "text-danger fw-600" : ""
-                      }">${d.complaints}</td>
-                      <td>${statusPill(d.duty_status)}</td>
-                      <td>
-                        <div class="flex gap-2">
-                          ${
-                            d.duty_status !== "On Trip"
-                              ? `
-                            <select class="filter-select" style="font-size:12px;padding:4px 8px"
-                              onchange="changeDriverStatus(${d.id}, this.value)" >
-                              <option value="">Change Status</option>
-                              <option value="On Duty">On Duty</option>
-                              <option value="Off Duty">Off Duty</option>
-                              <option value="Suspended">Suspended</option>
-                            </select>
-                          `
-                              : '<span class="text-muted fs-12">On Trip</span>'
-                          }
-                        </div>
-                      </td>
-                    </tr>
-                  `;
-                  })
-                  .join("")}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    `;
+// ═══════════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════════
+function applyVehicleFilter() {
+  const s = document.getElementById("v-search")?.value || "";
+  const ty = document.getElementById("v-type")?.value || "";
+  const st = document.getElementById("v-status")?.value || "";
+  let qs = [];
+  if (s) qs.push(`search=${encodeURIComponent(s)}`);
+  if (ty) qs.push(`type=${ty}`);
+  if (st) qs.push(`status=${st}`);
+  renderManagerVehicles(qs.length ? "?" + qs.join("&") : "");
 }
 
-let driverSearchTimer;
-function debounceDriverSearch(val) {
-  clearTimeout(driverSearchTimer);
-  driverSearchTimer = setTimeout(() => {
-    const qs = val ? `?search=${encodeURIComponent(val)}` : "";
-    api.drivers.list(qs).then((r) => {
-      const drivers = r.data?.data || [];
-      // re-render just tbody
-    });
-  }, 400);
+function daysUntilExpiry(dateStr) {
+  return Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
 }
 
-function renderDriversFiltered(status) {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-  api.drivers.list(qs).then((r) => {
-    state.drivers = r.data?.data || [];
-    renderDrivers();
-  });
+let debounceTimer;
+function debounce(fn, delay) {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(fn, delay);
 }
 
-async function changeDriverStatus(id, status) {
-  if (!status) return;
-  const { ok, data } = await api.drivers.setStatus(id, status);
-  if (ok) {
-    toast(data.message, "success");
-    renderDrivers();
-  } else toast(data.message, "error");
-}
-
-function showAddDriverModal() {
-  openModal(`
-      <div class="modal-header">
-        <span class="modal-title">👤 Add Driver</span>
-        <button class="modal-close" onclick="closeModal()">✕</button>
-      </div>
-      <form id="add-driver-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Full Name *</label>
-            <input class="form-control" name="name" placeholder="Ramesh Patel" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Phone</label>
-            <input class="form-control" name="phone" placeholder="9876543210">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">License Number *</label>
-            <input class="form-control" name="license_number" placeholder="GJ0120240001" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">License Category *</label>
-            <select class="form-control" name="license_category" required>
-              <option value="">Select</option>
-              <option>Truck</option><option>Van</option><option>Bike</option><option>All</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">License Expiry Date *</label>
-          <input class="form-control" type="date" name="license_expiry" required>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Add Driver</button>
-        </div>
-      </form>
-    `);
-  document.getElementById("add-driver-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const { ok, data } = await api.drivers.add(
-      Object.fromEntries(fd.entries())
-    );
-    if (ok) {
-      toast("Driver added!", "success");
-      closeModal();
-      renderDrivers();
-    } else toast(data.message, "error");
-  };
-}
-
-// ── ANALYTICS ─────────────────────────────────────────────
-async function renderAnalytics() {
-  const { ok, data } = await api.analytics.get();
-  if (!ok) {
-    toast(data.message, "error");
-    return;
-  }
+async function exportCSV() {
+  const { data } = await api.analytics.get();
   const a = data.data;
-
-  const maxCost = Math.max(
-    ...a.vehicle_efficiency.map((v) => parseFloat(v.total_cost) || 0),
-    1
+  const rows = [["Month", "Revenue", "Fuel Cost", "Maintenance", "Net Profit"]];
+  a.monthly_summary.forEach((m) =>
+    rows.push([
+      m.month,
+      m.revenue,
+      m.fuel_cost,
+      m.maintenance_cost,
+      m.net_profit,
+    ])
   );
-
-  document.querySelector(".page-content").innerHTML = `
-      <div class="page-enter">
-        <div class="kpi-grid">
-          <div class="kpi-card teal"><div class="kpi-value">${fmtRs(
-            a.total_revenue
-          )}</div><div class="kpi-label">Total Revenue</div></div>
-          <div class="kpi-card warning"><div class="kpi-value">${fmtRs(
-            a.total_fuel_cost
-          )}</div><div class="kpi-label">Total Fuel Cost</div></div>
-          <div class="kpi-card danger"><div class="kpi-value">${fmtRs(
-            a.total_maintenance
-          )}</div><div class="kpi-label">Maintenance Cost</div></div>
-          <div class="kpi-card accent"><div class="kpi-value">${
-            a.fleet_roi
-          }%</div><div class="kpi-label">Fleet ROI</div></div>
-          <div class="kpi-card success"><div class="kpi-value">${
-            a.utilization_rate
-          }%</div><div class="kpi-label">Utilization Rate</div></div>
-        </div>
-  
-        <div class="analytics-grid">
-          <div class="card">
-            <div class="card-header"><span class="card-title">🔥 Top Cost Vehicles</span></div>
-            <div class="bar-chart-container">
-              ${
-                a.vehicle_efficiency
-                  .slice(0, 6)
-                  .map(
-                    (v) => `
-                <div class="bar-item">
-                  <div class="bar-label">${v.license_plate}</div>
-                  <div class="bar-track">
-                    <div class="bar-fill warning" style="width:${(
-                      (parseFloat(v.total_cost) / maxCost) *
-                      100
-                    ).toFixed(1)}%"></div>
-                  </div>
-                  <div class="bar-value">${fmtRs(v.total_cost)}</div>
-                </div>
-              `
-                  )
-                  .join("") || '<div class="text-muted fs-13">No data yet</div>'
-              }
-            </div>
-          </div>
-  
-          <div class="card">
-            <div class="card-header"><span class="card-title">⛽ Fuel Efficiency (km/L)</span></div>
-            <div class="bar-chart-container">
-              ${
-                a.vehicle_efficiency
-                  .filter((v) => v.efficiency_km_per_liter > 0)
-                  .slice(0, 6)
-                  .map(
-                    (v) => `
-                <div class="bar-item">
-                  <div class="bar-label">${v.vehicle_name}</div>
-                  <div class="bar-track">
-                    <div class="bar-fill teal" style="width:${Math.min(
-                      parseFloat(v.efficiency_km_per_liter) * 5,
-                      100
-                    ).toFixed(1)}%"></div>
-                  </div>
-                  <div class="bar-value">${parseFloat(
-                    v.efficiency_km_per_liter
-                  ).toFixed(1)} km/L</div>
-                </div>
-              `
-                  )
-                  .join("") ||
-                '<div class="text-muted fs-13">Log expenses to see efficiency</div>'
-              }
-            </div>
-          </div>
-  
-          <div class="card" style="grid-column:1/-1">
-            <div class="card-header">
-              <span class="card-title">📊 Monthly Financial Summary</span>
-              <button class="btn btn-sm btn-secondary" onclick="exportCSV()">⬇️ Export CSV</button>
-            </div>
-            <div class="table-wrapper">
-              <table class="data-table">
-                <thead><tr><th>Month</th><th>Revenue</th><th>Fuel Cost</th><th>Maintenance</th><th>Net Profit</th></tr></thead>
-                <tbody>
-                  ${
-                    a.monthly_summary.length
-                      ? a.monthly_summary
-                          .map(
-                            (m) => `
-                    <tr>
-                      <td class="mono">${m.month}</td>
-                      <td class="text-success mono">${fmtRs(m.revenue)}</td>
-                      <td class="text-warning mono">${fmtRs(m.fuel_cost)}</td>
-                      <td class="text-danger mono">${fmtRs(
-                        m.maintenance_cost
-                      )}</td>
-                      <td class="${
-                        parseFloat(m.net_profit) >= 0
-                          ? "text-success"
-                          : "text-danger"
-                      } mono fw-600">${fmtRs(m.net_profit)}</td>
-                    </tr>
-                  `
-                          )
-                          .join("")
-                      : '<tr><td colspan="5" class="table-empty">Complete trips to see financial data</td></tr>'
-                  }
-                </tbody>
-              </table>
-            </div>
-          </div>
-  
-          ${
-            a.idle_vehicles.length
-              ? `
-          <div class="card" style="grid-column:1/-1">
-            <div class="card-header"><span class="card-title">💤 Dead Stock / Idle Vehicles</span><span class="pill pill-warning">Action Required</span></div>
-            <div class="table-wrapper">
-              <table class="data-table">
-                <thead><tr><th>License Plate</th><th>Name</th><th>Status</th><th>Last Trip</th></tr></thead>
-                <tbody>
-                  ${a.idle_vehicles
-                    .map(
-                      (v) => `
-                    <tr>
-                      <td class="mono">${v.license_plate}</td>
-                      <td>${v.name}</td>
-                      <td>${statusPill(v.status)}</td>
-                      <td class="text-muted fs-12">${
-                        v.last_trip ? fmtDate(v.last_trip) : "Never used"
-                      }</td>
-                    </tr>
-                  `
-                    )
-                    .join("")}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          `
-              : ""
-          }
-        </div>
-      </div>
-    `;
-}
-
-function exportCSV() {
-  api.analytics.get().then(({ data }) => {
-    const a = data.data;
-    const rows = [
-      ["Month", "Revenue", "Fuel Cost", "Maintenance", "Net Profit"],
-    ];
-    a.monthly_summary.forEach((m) => {
-      rows.push([
-        m.month,
-        m.revenue,
-        m.fuel_cost,
-        m.maintenance_cost,
-        m.net_profit,
-      ]);
-    });
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "fleetflow_report.csv";
-    link.click();
-    URL.revokeObjectURL(url);
-    toast("CSV exported!", "success");
-  });
+  const csv = rows.map((r) => r.join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  Object.assign(document.createElement("a"), {
+    href: url,
+    download: "fleetflow_report.csv",
+  }).click();
+  URL.revokeObjectURL(url);
+  toast("CSV exported!", "success");
 }

@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import pymysql
 import pymysql.cursors
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -19,7 +19,7 @@ CORS(app, supports_credentials=True, origins=[
 DB_CONFIG = {
     'host':        'localhost',
     'user':        'root',
-    'password':    'root',       # ← Change this to YOUR MySQL password
+    'password':    '',       # ← Change this to YOUR MySQL password
     'database':    'fleetflow',
     'cursorclass': pymysql.cursors.DictCursor,
     'charset':     'utf8mb4'
@@ -44,6 +44,18 @@ def clean_row(row):
 
 def clean_rows(rows):
     return [clean_row(r) for r in rows]
+
+def require_login():
+    if 'user_id' not in session:
+        return error("Not authenticated", 401)
+    return None
+
+def require_role(*roles):
+    if 'user_id' not in session:
+        return error("Not authenticated", 401)
+    if session.get('role') not in roles:
+        return error("Access denied", 403)
+    return None
 
 # ═══════════════════════════════════════════════════════════
 #  AUTH
@@ -105,6 +117,8 @@ def register():
     role     = data.get('role', 'dispatcher')
     if not all([name, email, password]):
         return error("All fields required")
+    if role not in ['dispatcher', 'manager', 'safety_officer', 'analyst']:
+        return error("Invalid role")
     try:
         db  = get_db()
         cur = db.cursor()
@@ -115,6 +129,60 @@ def register():
         return success(msg="User registered successfully")
     except Exception as e:
         return error(f"Email may already exist: {str(e)}")
+
+# ═══════════════════════════════════════════════════════════
+#  USER MANAGEMENT (Manager only)
+# ═══════════════════════════════════════════════════════════
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    err = require_login()
+    if err: return err
+    db  = get_db()
+    cur = db.cursor()
+    cur.execute("SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC")
+    rows = clean_rows(cur.fetchall())
+    cur.close(); db.close()
+    return success(rows)
+
+
+@app.route('/api/users/<int:uid>', methods=['PUT'])
+def update_user(uid):
+    err = require_role('manager')
+    if err: return err
+    d = request.json or {}
+    role = d.get('role')
+    name = d.get('name', '').strip()
+    if not role or role not in ['dispatcher', 'manager', 'safety_officer', 'analyst']:
+        return error("Valid role required")
+    try:
+        db  = get_db()
+        cur = db.cursor()
+        if name:
+            cur.execute("UPDATE users SET role=%s, name=%s WHERE id=%s", (role, name, uid))
+        else:
+            cur.execute("UPDATE users SET role=%s WHERE id=%s", (role, uid))
+        db.commit()
+        cur.close(); db.close()
+        return success(msg="User updated")
+    except Exception as e:
+        return error(str(e))
+
+
+@app.route('/api/users/<int:uid>', methods=['DELETE'])
+def delete_user(uid):
+    err = require_role('manager')
+    if err: return err
+    if uid == session.get('user_id'):
+        return error("Cannot delete yourself")
+    try:
+        db  = get_db()
+        cur = db.cursor()
+        cur.execute("DELETE FROM users WHERE id=%s", (uid,))
+        db.commit()
+        cur.close(); db.close()
+        return success(msg="User removed")
+    except Exception as e:
+        return error(str(e))
 
 # ═══════════════════════════════════════════════════════════
 #  DASHBOARD
@@ -134,7 +202,7 @@ def dashboard():
     pending_cargo = cur.fetchone()['cnt']
     cur.execute("""
         SELECT t.id, v.license_plate, v.type as fleet_type,
-               t.origin, t.destination, d.name as driver,
+               t.origin, t.destination, d.name as driver_name,
                t.status, t.created_at
         FROM trips t
         JOIN vehicles v ON t.vehicle_id=v.id
@@ -144,10 +212,16 @@ def dashboard():
     recent_trips = clean_rows(cur.fetchall())
     cur.execute("SELECT COUNT(*) as cnt FROM drivers WHERE license_expiry < CURDATE() AND duty_status!='Suspended'")
     expired_licenses = cur.fetchone()['cnt']
+    # Idle vehicles count for manager dashboard
+    cur.execute("""SELECT COUNT(*) as cnt FROM vehicles v WHERE v.status='Available'
+        AND (SELECT MAX(t.completed_at) FROM trips t WHERE t.vehicle_id=v.id) < DATE_SUB(NOW(),INTERVAL 7 DAY)
+        OR (v.status='Available' AND NOT EXISTS(SELECT 1 FROM trips t2 WHERE t2.vehicle_id=v.id))""")
+    idle_count = cur.fetchone()['cnt']
     cur.close(); db.close()
     return success({'active_fleet': active_fleet, 'maintenance_alerts': maintenance_alerts,
                     'utilization_rate': util_rate, 'pending_cargo': pending_cargo,
-                    'expired_licenses': expired_licenses, 'recent_trips': recent_trips})
+                    'expired_licenses': expired_licenses, 'recent_trips': recent_trips,
+                    'idle_vehicles': idle_count})
 
 # ═══════════════════════════════════════════════════════════
 #  VEHICLES
@@ -173,17 +247,19 @@ def get_vehicles():
 @app.route('/api/vehicles', methods=['POST'])
 def add_vehicle():
     d=request.json or {}
-    for r in ['name','model','license_plate','type','max_capacity_kg']:
-        if not d.get(r): return error(f"Missing field: {r}")
+    required=['name','model','license_plate','type','max_capacity_kg']
+    if not all(d.get(k) for k in required):
+        return error("name, model, license_plate, type, max_capacity_kg required")
+    if d['type'] not in ['Truck','Van','Bike']:
+        return error("Type must be Truck, Van, or Bike")
     try:
         db=get_db(); cur=db.cursor()
-        cur.execute("""INSERT INTO vehicles
-            (name,model,license_plate,type,max_capacity_kg,odometer_km,acquisition_cost,region,status)
-            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,'Available')""",
+        cur.execute("""INSERT INTO vehicles(name,model,license_plate,type,max_capacity_kg,
+            odometer_km,acquisition_cost,region) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)""",
             (d['name'],d['model'],d['license_plate'],d['type'],d['max_capacity_kg'],
              d.get('odometer_km',0),d.get('acquisition_cost',0),d.get('region','')))
         db.commit(); new_id=cur.lastrowid; cur.close(); db.close()
-        return success({'id':new_id},"Vehicle registered successfully")
+        return success({'id':new_id},"Vehicle registered!")
     except Exception as e: return error(str(e))
 
 
@@ -192,23 +268,21 @@ def update_vehicle(vid):
     d=request.json or {}
     try:
         db=get_db(); cur=db.cursor()
-        cur.execute("""UPDATE vehicles SET name=%s,model=%s,type=%s,max_capacity_kg=%s,
-            odometer_km=%s,acquisition_cost=%s,region=%s,status=%s WHERE id=%s""",
-            (d.get('name'),d.get('model'),d.get('type'),d.get('max_capacity_kg'),
-             d.get('odometer_km'),d.get('acquisition_cost'),d.get('region'),d.get('status'),vid))
+        cur.execute("""UPDATE vehicles SET name=%s,model=%s,license_plate=%s,type=%s,
+            max_capacity_kg=%s,odometer_km=%s,acquisition_cost=%s,region=%s,status=%s WHERE id=%s""",
+            (d['name'],d['model'],d['license_plate'],d['type'],d['max_capacity_kg'],
+             d['odometer_km'],d['acquisition_cost'],d.get('region',''),d.get('status','Available'),vid))
         db.commit(); cur.close(); db.close()
         return success(msg="Vehicle updated")
     except Exception as e: return error(str(e))
 
 
 @app.route('/api/vehicles/<int:vid>', methods=['DELETE'])
-def delete_vehicle(vid):
-    try:
-        db=get_db(); cur=db.cursor()
-        cur.execute("UPDATE vehicles SET status='Retired' WHERE id=%s",(vid,))
-        db.commit(); cur.close(); db.close()
-        return success(msg="Vehicle retired")
-    except Exception as e: return error(str(e))
+def retire_vehicle(vid):
+    db=get_db(); cur=db.cursor()
+    cur.execute("UPDATE vehicles SET status='Retired' WHERE id=%s",(vid,))
+    db.commit(); cur.close(); db.close()
+    return success(msg="Vehicle retired")
 
 
 @app.route('/api/vehicles/<int:vid>/toggle-service', methods=['POST'])
@@ -220,40 +294,41 @@ def toggle_service(vid):
     new_status='Available' if v['status']=='In Shop' else 'In Shop'
     cur.execute("UPDATE vehicles SET status=%s WHERE id=%s",(new_status,vid))
     db.commit(); cur.close(); db.close()
-    return success({'new_status':new_status})
+    return success({'status':new_status},f"Vehicle set to {new_status}")
 
 # ═══════════════════════════════════════════════════════════
 #  DRIVERS
 # ═══════════════════════════════════════════════════════════
 @app.route('/api/drivers', methods=['GET'])
 def get_drivers():
-    search=request.args.get('search',''); status_f=request.args.get('status','')
+    status_f=request.args.get('status',''); search=request.args.get('search','')
     query="SELECT * FROM drivers WHERE 1=1"; params=[]
+    if status_f: query+=" AND duty_status=%s"; params.append(status_f)
     if search:
         query+=" AND (name LIKE %s OR license_number LIKE %s)"
         params+=[f'%{search}%',f'%{search}%']
-    if status_f: query+=" AND duty_status=%s"; params.append(status_f)
-    query+=" ORDER BY name"
+    query+=" ORDER BY created_at DESC"
     db=get_db(); cur=db.cursor()
-    cur.execute(query,params); drivers=clean_rows(cur.fetchall())
+    cur.execute(query,params); rows=clean_rows(cur.fetchall())
     cur.close(); db.close()
-    today=date.today().isoformat()
-    for d in drivers: d['license_expired']=d['license_expiry']<today
-    return success(drivers)
+    return success(rows)
 
 
 @app.route('/api/drivers', methods=['POST'])
 def add_driver():
     d=request.json or {}
-    for r in ['name','license_number','license_expiry','license_category']:
-        if not d.get(r): return error(f"Missing field: {r}")
+    required=['name','license_number','license_expiry','license_category']
+    if not all(d.get(k) for k in required):
+        return error("name, license_number, license_expiry, license_category required")
+    if d['license_category'] not in ['Truck','Van','Bike','All']:
+        return error("Invalid license category")
     try:
         db=get_db(); cur=db.cursor()
         cur.execute("""INSERT INTO drivers(name,license_number,license_expiry,license_category,phone)
             VALUES(%s,%s,%s,%s,%s)""",
             (d['name'],d['license_number'],d['license_expiry'],d['license_category'],d.get('phone','')))
         db.commit(); new_id=cur.lastrowid; cur.close(); db.close()
-        return success({'id':new_id},"Driver added successfully")
+        return success({'id':new_id},"Driver added!")
     except Exception as e: return error(str(e))
 
 
@@ -262,24 +337,27 @@ def update_driver(did):
     d=request.json or {}
     try:
         db=get_db(); cur=db.cursor()
-        cur.execute("""UPDATE drivers SET name=%s,license_number=%s,license_expiry=%s,
-            license_category=%s,phone=%s,safety_score=%s,completion_rate=%s,complaints=%s,duty_status=%s
-            WHERE id=%s""",
-            (d.get('name'),d.get('license_number'),d.get('license_expiry'),d.get('license_category'),
-             d.get('phone'),d.get('safety_score'),d.get('completion_rate'),d.get('complaints'),d.get('duty_status'),did))
+        cur.execute("""UPDATE drivers SET name=%s,phone=%s,license_number=%s,license_category=%s,
+            license_expiry=%s,safety_score=%s,complaints=%s,completion_rate=%s,duty_status=%s WHERE id=%s""",
+            (d['name'],d.get('phone',''),d['license_number'],d['license_category'],
+             d['license_expiry'],d.get('safety_score',100),d.get('complaints',0),
+             d.get('completion_rate',100),d.get('duty_status','Off Duty'),did))
         db.commit(); cur.close(); db.close()
         return success(msg="Driver updated")
     except Exception as e: return error(str(e))
 
 
 @app.route('/api/drivers/<int:did>/status', methods=['POST'])
-def change_driver_status(did):
-    new_status=(request.json or {}).get('status')
-    if new_status not in ['On Duty','Off Duty','Suspended']: return error("Invalid status")
+def set_driver_status(did):
+    d=request.json or {}
+    status=d.get('status')
+    valid=['On Duty','Off Duty','Suspended','On Trip']
+    if status not in valid:
+        return error(f"Status must be one of: {', '.join(valid)}")
     db=get_db(); cur=db.cursor()
-    cur.execute("UPDATE drivers SET duty_status=%s WHERE id=%s",(new_status,did))
+    cur.execute("UPDATE drivers SET duty_status=%s WHERE id=%s",(status,did))
     db.commit(); cur.close(); db.close()
-    return success(msg=f"Driver status → {new_status}")
+    return success({'status':status},f"Driver status → {status}")
 
 # ═══════════════════════════════════════════════════════════
 #  TRIPS
@@ -287,9 +365,10 @@ def change_driver_status(did):
 @app.route('/api/trips', methods=['GET'])
 def get_trips():
     status_f=request.args.get('status','')
-    query="""SELECT t.*,v.license_plate,v.name as vehicle_name,v.type as fleet_type,
-               v.max_capacity_kg,d.name as driver_name
-        FROM trips t JOIN vehicles v ON t.vehicle_id=v.id JOIN drivers d ON t.driver_id=d.id WHERE 1=1"""
+    query="""SELECT t.*,v.license_plate,v.type as fleet_type,v.max_capacity_kg,
+        d.name as driver_name FROM trips t
+        JOIN vehicles v ON t.vehicle_id=v.id
+        JOIN drivers  d ON t.driver_id=d.id WHERE 1=1"""
     params=[]
     if status_f: query+=" AND t.status=%s"; params.append(status_f)
     query+=" ORDER BY t.created_at DESC"
@@ -302,35 +381,24 @@ def get_trips():
 @app.route('/api/trips', methods=['POST'])
 def create_trip():
     d=request.json or {}
-    for r in ['vehicle_id','driver_id','cargo_weight_kg','origin','destination']:
-        if not d.get(r): return error(f"Missing field: {r}")
-    db=get_db(); cur=db.cursor()
-
-    cur.execute("SELECT * FROM vehicles WHERE id=%s",(d['vehicle_id'],))
-    vehicle=cur.fetchone()
-    if not vehicle: cur.close(); db.close(); return error("Vehicle not found",404)
-    if vehicle['status']!='Available':
-        cur.close(); db.close(); return error(f"Vehicle is '{vehicle['status']}' — not available")
-
-    if float(d['cargo_weight_kg'])>float(vehicle['max_capacity_kg']):
-        cur.close(); db.close()
-        return error(f"Cargo {d['cargo_weight_kg']}kg exceeds capacity {vehicle['max_capacity_kg']}kg!")
-
-    cur.execute("SELECT * FROM drivers WHERE id=%s",(d['driver_id'],))
-    driver=cur.fetchone()
-    if not driver: cur.close(); db.close(); return error("Driver not found",404)
-    if driver['duty_status']!='On Duty':
-        cur.close(); db.close(); return error(f"Driver is '{driver['duty_status']}' — must be On Duty")
-
-    expiry=driver['license_expiry']
-    if isinstance(expiry,str): expiry=datetime.strptime(expiry,'%Y-%m-%d').date()
-    if expiry<date.today():
-        cur.close(); db.close(); return error("Driver license EXPIRED — assignment blocked!")
-
+    required=['vehicle_id','driver_id','cargo_weight_kg','origin','destination']
+    if not all(d.get(k) for k in required):
+        return error("vehicle_id, driver_id, cargo_weight_kg, origin, destination required")
     try:
+        db=get_db(); cur=db.cursor()
+        cur.execute("SELECT status,max_capacity_kg,odometer_km FROM vehicles WHERE id=%s",(d['vehicle_id'],))
+        vehicle=cur.fetchone()
+        if not vehicle: cur.close(); db.close(); return error("Vehicle not found",404)
+        if vehicle['status']!='Available': cur.close(); db.close(); return error("Vehicle not available")
+        if float(d['cargo_weight_kg'])>float(vehicle['max_capacity_kg']):
+            cur.close(); db.close(); return error("Cargo exceeds vehicle capacity!")
+        cur.execute("SELECT duty_status,license_expiry FROM drivers WHERE id=%s",(d['driver_id'],))
+        driver=cur.fetchone()
+        if not driver: cur.close(); db.close(); return error("Driver not found",404)
+        if driver['duty_status']=='Suspended': cur.close(); db.close(); return error("Driver is suspended!")
+        if driver['license_expiry'] < date.today(): cur.close(); db.close(); return error("Driver license expired!")
         cur.execute("""INSERT INTO trips(vehicle_id,driver_id,cargo_weight_kg,origin,destination,
-            estimated_fuel_cost,revenue,status,start_odometer)
-            VALUES(%s,%s,%s,%s,%s,%s,%s,'Dispatched',%s)""",
+            estimated_fuel_cost,revenue,status,start_odometer) VALUES(%s,%s,%s,%s,%s,%s,%s,'Dispatched',%s)""",
             (d['vehicle_id'],d['driver_id'],d['cargo_weight_kg'],d['origin'],d['destination'],
              d.get('estimated_fuel_cost',0),d.get('revenue',0),vehicle['odometer_km']))
         cur.execute("UPDATE vehicles SET status='On Trip' WHERE id=%s",(d['vehicle_id'],))
@@ -448,51 +516,105 @@ def add_expense():
     except Exception as e: return error(str(e))
 
 # ═══════════════════════════════════════════════════════════
-#  ANALYTICS
+#  ANALYTICS (with period filter: week / month / year / all)
 # ═══════════════════════════════════════════════════════════
 @app.route('/api/analytics', methods=['GET'])
 def analytics():
+    period = request.args.get('period', 'all')  # week | month | year | all
     db=get_db(); cur=db.cursor()
-    cur.execute("SELECT COALESCE(SUM(fuel_cost),0) as t FROM expenses")
+
+    # Build date filter
+    date_filter = ""
+    if period == 'week':
+        date_filter = " AND t.completed_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+    elif period == 'month':
+        date_filter = " AND t.completed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
+    elif period == 'year':
+        date_filter = " AND t.completed_at >= DATE_SUB(NOW(), INTERVAL 365 DAY)"
+
+    expense_date_filter = ""
+    if period == 'week':
+        expense_date_filter = " AND e.date >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+    elif period == 'month':
+        expense_date_filter = " AND e.date >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
+    elif period == 'year':
+        expense_date_filter = " AND e.date >= DATE_SUB(NOW(), INTERVAL 365 DAY)"
+
+    maint_date_filter = ""
+    if period == 'week':
+        maint_date_filter = " AND m2.date >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+    elif period == 'month':
+        maint_date_filter = " AND m2.date >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
+    elif period == 'year':
+        maint_date_filter = " AND m2.date >= DATE_SUB(NOW(), INTERVAL 365 DAY)"
+
+    cur.execute(f"SELECT COALESCE(SUM(fuel_cost),0) as t FROM expenses e WHERE 1=1{expense_date_filter}")
     total_fuel=float(cur.fetchone()['t'])
-    cur.execute("SELECT COALESCE(SUM(cost),0) as t FROM maintenance_logs WHERE status='Completed'")
+
+    cur.execute(f"SELECT COALESCE(SUM(cost),0) as t FROM maintenance_logs m2 WHERE status='Completed'{maint_date_filter}")
     total_maint=float(cur.fetchone()['t'])
-    cur.execute("SELECT COALESCE(SUM(revenue),0) as t FROM trips WHERE status='Completed'")
+
+    cur.execute(f"SELECT COALESCE(SUM(revenue),0) as t FROM trips t WHERE status='Completed'{date_filter}")
     total_rev=float(cur.fetchone()['t'])
+
     cur.execute("SELECT COALESCE(SUM(acquisition_cost),0) as t FROM vehicles")
     total_acq=float(cur.fetchone()['t'])
     fleet_roi=round(((total_rev-total_fuel-total_maint)/total_acq)*100,2) if total_acq>0 else 0
+
     cur.execute("SELECT COUNT(*) as t FROM vehicles WHERE status!='Retired'")
     total_v=cur.fetchone()['t']
     cur.execute("SELECT COUNT(*) as t FROM vehicles WHERE status='On Trip'")
     on_trip=cur.fetchone()['t']
     util=round(on_trip/total_v*100,1) if total_v>0 else 0
-    cur.execute("""SELECT v.license_plate,v.name as vehicle_name,
+
+    # Trip status distribution (for pie chart)
+    cur.execute(f"""SELECT status, COUNT(*) as cnt FROM trips t WHERE 1=1{date_filter.replace('t.completed_at','t.created_at') if period!='all' else ''} GROUP BY status""")
+    trip_status_dist = clean_rows(cur.fetchall())
+
+    # Vehicle type distribution
+    cur.execute("SELECT type, COUNT(*) as cnt FROM vehicles WHERE status!='Retired' GROUP BY type")
+    vehicle_type_dist = clean_rows(cur.fetchall())
+
+    cur.execute(f"""SELECT v.license_plate,v.name as vehicle_name,
         COALESCE(SUM(e.distance_km),0) as total_km,COALESCE(SUM(e.fuel_liters),0) as total_liters,
         CASE WHEN SUM(e.fuel_liters)>0 THEN ROUND(SUM(e.distance_km)/SUM(e.fuel_liters),2) ELSE 0 END as efficiency_km_per_liter,
         COALESCE(SUM(e.fuel_cost)+SUM(e.misc_expense),0) as total_cost
         FROM vehicles v LEFT JOIN trips t ON v.id=t.vehicle_id LEFT JOIN expenses e ON t.id=e.trip_id
+        WHERE 1=1{expense_date_filter.replace('e.date','e.date')}
         GROUP BY v.id,v.license_plate,v.name ORDER BY total_cost DESC LIMIT 10""")
     vehicle_eff=clean_rows(cur.fetchall())
-    cur.execute("""SELECT DATE_FORMAT(t.completed_at,'%%Y-%%m') as month,
+
+    cur.execute(f"""SELECT DATE_FORMAT(t.completed_at,'%%Y-%%m') as month,
         COALESCE(SUM(t.revenue),0) as revenue,COALESCE(SUM(e.fuel_cost),0) as fuel_cost,
         COALESCE(SUM(m.cost),0) as maintenance_cost,
         COALESCE(SUM(t.revenue)-SUM(e.fuel_cost)-SUM(m.cost),0) as net_profit
         FROM trips t LEFT JOIN expenses e ON t.id=e.trip_id
         LEFT JOIN maintenance_logs m ON t.vehicle_id=m.vehicle_id
             AND DATE_FORMAT(m.date,'%%Y-%%m')=DATE_FORMAT(t.completed_at,'%%Y-%%m')
-        WHERE t.status='Completed' AND t.completed_at IS NOT NULL
-        GROUP BY DATE_FORMAT(t.completed_at,'%%Y-%%m') ORDER BY month DESC LIMIT 6""")
+        WHERE t.status='Completed' AND t.completed_at IS NOT NULL{date_filter}
+        GROUP BY DATE_FORMAT(t.completed_at,'%%Y-%%m') ORDER BY month ASC LIMIT 12""")
     monthly=clean_rows(cur.fetchall())
+
     cur.execute("""SELECT v.license_plate,v.name,v.status,MAX(t.completed_at) as last_trip
         FROM vehicles v LEFT JOIN trips t ON v.id=t.vehicle_id WHERE v.status='Available'
         GROUP BY v.id,v.license_plate,v.name,v.status
         HAVING last_trip IS NULL OR last_trip<DATE_SUB(NOW(),INTERVAL 7 DAY)""")
     idle=clean_rows(cur.fetchall())
+
+    # Driver performance summary
+    cur.execute("""SELECT d.name, d.safety_score, d.completion_rate, d.complaints,
+        COUNT(t.id) as trip_count
+        FROM drivers d LEFT JOIN trips t ON d.id=t.driver_id
+        GROUP BY d.id, d.name, d.safety_score, d.completion_rate, d.complaints
+        ORDER BY d.safety_score DESC LIMIT 10""")
+    driver_perf = clean_rows(cur.fetchall())
+
     cur.close(); db.close()
     return success({'total_fuel_cost':total_fuel,'total_maintenance':total_maint,
                     'total_revenue':total_rev,'fleet_roi':fleet_roi,'utilization_rate':util,
-                    'vehicle_efficiency':vehicle_eff,'monthly_summary':monthly,'idle_vehicles':idle})
+                    'vehicle_efficiency':vehicle_eff,'monthly_summary':monthly,'idle_vehicles':idle,
+                    'trip_status_dist':trip_status_dist,'vehicle_type_dist':vehicle_type_dist,
+                    'driver_performance':driver_perf,'period':period})
 
 
 if __name__ == '__main__':
